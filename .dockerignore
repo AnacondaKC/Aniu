@@ -1,0 +1,42 @@
+# Runtime / secrets
+backend/.env
+backend/data/
+.env.docker
+
+# Python
+backend/.venv/
+backend/.pytest_cache/
+backend/tests/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Lint / IDE / OS
+.ruff_cache/
+.vscode/
+.idea/
+.opencode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# Docker itself
+# keep Docker deployment files in build context
+
+# Docs / scripts not needed in image
+README.md
+README.zh-CN.md
+CONTRIBUTING.md
+LICENSE
+start-mx-moni.bat
+start-mx-moni.ps1
+.git/
+.gitignore

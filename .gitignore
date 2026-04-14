@@ -1,0 +1,55 @@
+# ── Runtime / secrets ──────────────────────────────────
+backend/.env
+backend/.env.local
+/.env.docker
+/.env
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
+backend/app/data/trading_calendar.json
+
+# ── Python ────────────────────────────────────────────
+backend/.venv/
+backend/.pytest_cache/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# ── Node / Frontend ───────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ── Lint / Format ─────────────────────────────────────
+.ruff_cache/
+
+# ── IDE / Editor ──────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── OpenCode working dir ──────────────────────────────
+.opencode/
+
+# ── Logs ──────────────────────────────────────────────
+*.log
+
+# ── Test / coverage / temp ────────────────────────────
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+.pytest_cache/
+tmp/
+temp/
+
+# ── Docker / image artifacts ──────────────────────────
+*.tar
+*.tar.gz
+*.tgz

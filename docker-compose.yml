@@ -1,0 +1,20 @@
+services:
+  aniu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aniu:latest
+    container_name: aniu
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    environment:
+      SQLITE_DB_PATH: /app/data/aniu.sqlite3
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+    volumes:
+      - aniu-data:/app/data
+
+volumes:
+  aniu-data:
