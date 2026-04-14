@@ -11,6 +11,10 @@ RUN npm run build
 
 FROM python:3.12-slim AS runtime
 
+LABEL org.opencontainers.image.source="https://github.com/AnacondaKC/Aniu"
+LABEL org.opencontainers.image.description="AI simulated trading platform using the East Money Miaoxiang interface"
+LABEL org.opencontainers.image.licenses="MIT"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \

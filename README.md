@@ -260,3 +260,17 @@ CORS_ALLOW_ORIGINS=https://your-domain.com
 ### 2. 交易日历缓存
 
 镜像中已包含 `backend/app/data/trading_calendar.json`，可以降低首次启动时因为交易日历远程接口异常导致的风险。
+
+## 镜像发布
+
+仓库已包含 GitHub Actions 工作流 `.github/workflows/publish-image.yml`。
+
+- 当你向 `main` 分支推送代码时，会自动构建并发布 `ghcr.io/anacondakc/aniu:latest`
+- 同时会附带一个基于提交 SHA 的镜像标签，便于回滚和定位
+- 当你推送形如 `v1.0.0` 的 Git tag 时，也会自动发布同名版本标签
+
+拉取示例：
+
+```bash
+docker pull ghcr.io/anacondakc/aniu:latest
+```
