@@ -1,9 +1,6 @@
 services:
   aniu:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: aniu:latest
+    image: ghcr.io/anacondakc/aniu:${ANIU_IMAGE_TAG:-latest}
     container_name: aniu
     restart: unless-stopped
     ports:

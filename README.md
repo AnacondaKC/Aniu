@@ -131,7 +131,7 @@ http://127.0.0.1:3003
 
 ## Docker 部署
 
-### 方式一：直接使用 `docker build` + `docker run`
+### 方式一：直接拉取 GHCR 镜像并运行
 
 1. 复制部署环境模板：
 
@@ -141,10 +141,10 @@ cp .env.docker.example .env.docker
 
 2. 修改 `.env.docker` 中的实际配置。
 
-3. 构建镜像：
+3. 拉取镜像：
 
 ```bash
-docker build -t aniu:latest .
+docker pull ghcr.io/anacondakc/aniu:latest
 ```
 
 4. 启动容器：
@@ -155,7 +155,7 @@ docker run -d \
   -p 8000:8000 \
   --env-file .env.docker \
   -v aniu-data:/app/data \
-  aniu:latest
+  ghcr.io/anacondakc/aniu:latest
 ```
 
 ### 方式二：使用 `docker compose`
@@ -168,10 +168,12 @@ cp .env.docker.example .env.docker
 
 2. 修改 `.env.docker`。
 
+如果你要固定到某个镜像版本，可以把 `ANIU_IMAGE_TAG` 改成例如 `sha-95cd1a4` 或后续发布的 `v1.0.0`。
+
 3. 启动：
 
 ```bash
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
 4. 停止：
@@ -274,6 +276,7 @@ CORS_ALLOW_ORIGINS=https://your-domain.com
 - 当你向 `main` 分支推送代码时，会自动构建并发布 `ghcr.io/anacondakc/aniu:latest`
 - 同时会附带一个基于提交 SHA 的镜像标签，便于回滚和定位
 - 当你推送形如 `v1.0.0` 的 Git tag 时，也会自动发布同名版本标签
+- `docker-compose.yml` 默认会拉取 `ghcr.io/anacondakc/aniu:${ANIU_IMAGE_TAG:-latest}`
 
 拉取示例：
 
