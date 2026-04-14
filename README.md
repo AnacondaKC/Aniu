@@ -1,3 +1,5 @@
+<div align="center">
+
 # Aniu
 
 Aniu 是一个面向 A 股 / 港股场景的智能分析与模拟交易系统，提供以下能力：
