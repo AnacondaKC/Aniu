@@ -71,12 +71,14 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+          if gh release view "$TAG_NAME" --repo "$GH_REPO" >/dev/null 2>&1; then
             exit 0
           fi
 
           gh release create "$TAG_NAME" \
+            --repo "$GH_REPO" \
             --title "$TAG_NAME" \
             --generate-notes
