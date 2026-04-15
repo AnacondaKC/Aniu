@@ -125,12 +125,18 @@ http://127.0.0.1:3003
 
 关键项：
 
-- `APP_LOGIN_USERNAME`：系统登录用户名（必须）
 - `APP_LOGIN_PASSWORD`：系统登录密码（必须）
 
 ### Docker 部署环境变量
 
 参考文件：`.env.docker.example`
+
+Docker Compose 最小部署时，默认只需要关心：
+
+- `APP_LOGIN_PASSWORD`：系统登录密码
+- `ANIU_IMAGE_TAG`：镜像标签，默认 `latest`
+
+其它模型与妙想相关配置可以在容器启动后，通过页面中的“功能设置”进行填写和保存，无需强制写入 Compose 环境变量。
 
 
 ## Docker 部署
@@ -143,7 +149,13 @@ http://127.0.0.1:3003
 cp .env.docker.example .env.docker
 ```
 
-2. 修改 `.env.docker` 中的实际配置。
+2. 最少修改 `.env.docker` 中的登录配置：
+
+```text
+APP_LOGIN_PASSWORD=your-password
+```
+
+如果你希望固定镜像版本，可以同时修改 `ANIU_IMAGE_TAG`。
 
 3. 拉取镜像：
 
@@ -158,9 +170,20 @@ docker run -d \
   --name aniu \
   -p 8000:8000 \
   --env-file .env.docker \
-  -v aniu-data:/app/data \
+  -v "$(pwd)/data:/app/data" \
   ghcr.io/anacondakc/aniu:latest
 ```
+
+5. 启动后访问 `http://<你的主机IP>:8000`，输入上一步设置的密码登录。
+
+6. 首次进入后，到“功能设置”页面中填写：
+
+- `OpenAI API Key`
+- `OpenAI Base URL`
+- `OpenAI Model`
+- `妙想密钥`
+
+保存后，AI 分析与妙想工具即可正常使用。
 
 ### 方式二：使用 `docker compose`
 
@@ -170,7 +193,11 @@ docker run -d \
 cp .env.docker.example .env.docker
 ```
 
-2. 修改 `.env.docker`。
+2. 最少修改 `.env.docker` 中的登录配置：
+
+```text
+APP_LOGIN_PASSWORD=your-password
+```
 
 如果你要固定到某个镜像版本，可以把 `ANIU_IMAGE_TAG` 改成例如 `sha-95cd1a4` 或后续发布的 `v1.0.0`。
 
@@ -180,7 +207,18 @@ cp .env.docker.example .env.docker
 docker compose pull && docker compose up -d
 ```
 
-4. 停止：
+4. 打开 `http://<你的主机IP>:8000`，输入 `.env.docker` 中设置的密码登录。
+
+5. 首次进入后，在“功能设置”页面中补充：
+
+- `OpenAI API Key`
+- `OpenAI Base URL`
+- `OpenAI Model`
+- `妙想密钥`
+
+保存后即可开始使用 AI 分析、定时任务与妙想工具。
+
+6. 停止：
 
 ```bash
 docker compose down
@@ -192,7 +230,7 @@ docker compose down
 
 - 前端在构建阶段打包后复制到 `/app/static`
 - 后端通过 FastAPI 同时提供 API 和静态前端页面
-- SQLite 数据库存放在 `/app/data/aniu.sqlite3`
+- 默认 SQLite 数据库存放在 `/app/data/aniu.db`
 - 容器内置健康检查：
 
 ```text
@@ -243,21 +281,43 @@ curl http://127.0.0.1:8000/health
 ```bash
 curl -X POST http://127.0.0.1:8000/api/aniu/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"your-username","password":"your-password"}'
+  -d '{"password":"your-password"}'
 ```
 
 ## 数据与持久化
 
-- 默认数据库：`/app/data/aniu.sqlite3`
-- `docker-compose.yml` 中已挂载命名卷：`aniu-data`
+- 默认数据库：`/app/data/aniu.db`
+- `docker-compose.yml` 默认挂载宿主机目录：`./data:/app/data`
 
 如果使用 `docker run`，请务必挂载数据卷或宿主机目录，否则容器重建后 SQLite 数据会丢失。
 
 ## 注意事项
 
-### 1. CORS 配置
+### 1. 首次配置说明
 
-当前 `.env.docker.example` 中默认：
+为了简化 Compose 部署流程，OpenAI 与妙想相关配置默认不要求写在 Compose 文件中。推荐流程是：
+
+1. 先用最小配置启动容器
+2. 登录页面
+3. 在“功能设置”中填写并保存以下内容：
+
+- `OpenAI API Key`
+- `OpenAI Base URL`
+- `OpenAI Model`
+- `妙想密钥`
+
+这样可以减少部署时需要维护的环境变量数量。
+
+### 2. JWT Secret
+
+`JWT_SECRET` 当前支持自动生成，因此不是最小部署的必填项。
+
+- 如果你只关注快速启动，可以不显式设置
+- 如果你希望容器重启或重建后仍保持登录态稳定，建议在 `.env.docker` 中手动设置固定值
+
+### 3. CORS 配置
+
+当前后端默认允许所有来源：
 
 ```text
 CORS_ALLOW_ORIGINS=*
@@ -269,7 +329,7 @@ CORS_ALLOW_ORIGINS=*
 CORS_ALLOW_ORIGINS=https://your-domain.com
 ```
 
-### 2. 交易日历缓存
+### 4. 交易日历缓存
 
 镜像中已包含 `backend/app/data/trading_calendar.json`，可以降低首次启动时因为交易日历远程接口异常导致的风险。
 

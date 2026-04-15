@@ -20,7 +20,6 @@ from app.services.trading_calendar_service import trading_calendar_service
 def create_test_client(monkeypatch, tmp_path) -> TestClient:
     from app.services.aniu_service import aniu_service
 
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "release-user")
     monkeypatch.setenv("APP_LOGIN_PASSWORD", "release-pass")
     monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setattr(trading_calendar_service, "ensure_years", lambda years: None)
@@ -38,7 +37,7 @@ def create_test_client(monkeypatch, tmp_path) -> TestClient:
 def _auth_headers(client: TestClient) -> dict[str, str]:
     response = client.post(
         "/api/aniu/login",
-        json={"username": "release-user", "password": "release-pass"},
+        json={"password": "release-pass"},
     )
     payload = response.json()
     return {"Authorization": f"Bearer {payload['token']}"}
@@ -48,13 +47,12 @@ def test_login_endpoint_accepts_configured_credentials(monkeypatch, tmp_path) ->
     with create_test_client(monkeypatch, tmp_path) as client:
         response = client.post(
             "/api/aniu/login",
-            json={"username": "release-user", "password": "release-pass"},
+            json={"password": "release-pass"},
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["authenticated"] is True
-    assert payload["username"] == "release-user"
     assert payload["token"]
     database_module._engine = None
     database_module._session_local = None
@@ -65,7 +63,7 @@ def test_login_endpoint_rejects_invalid_credentials(monkeypatch, tmp_path) -> No
     with create_test_client(monkeypatch, tmp_path) as client:
         response = client.post(
             "/api/aniu/login",
-            json={"username": "release-user", "password": "wrong-password"},
+            json={"password": "wrong-password"},
         )
 
     assert response.status_code == 401
@@ -75,7 +73,6 @@ def test_login_endpoint_rejects_invalid_credentials(monkeypatch, tmp_path) -> No
 
 
 def test_app_startup_requires_current_year_trading_calendar(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "release-user")
     monkeypatch.setenv("APP_LOGIN_PASSWORD", "release-pass")
     monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setattr(

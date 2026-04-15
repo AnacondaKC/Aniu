@@ -9,6 +9,7 @@ backend/data/*.sqlite3
 
 # ── Python ────────────────────────────────────────────
 backend/.venv/
+backend/.devdata/
 backend/.pytest_cache/
 **/__pycache__/
 *.pyc

@@ -1355,10 +1355,9 @@ textarea {
 .stat-compact {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   min-height: 0;
   height: 100%;
-  gap: 8px;
+  gap: 12px;
 }
 
 .stat-main {
@@ -1411,7 +1410,7 @@ textarea {
 /* TOKEN统计行 */
 .token-row {
   display: flex;
-  gap: 6px;
+  gap: 12px;
 }
 
 .token-item {

@@ -31,12 +31,12 @@ def _safe_json_dumps(payload: Any) -> str:
 
 
 def _slim_tool_result(tool_result: dict[str, Any]) -> dict[str, Any]:
-    """Only pass normalized + summary to the model; keep raw out of context."""
+    """Pass raw tool payloads to the model while keeping minimal metadata."""
     return {
         "ok": tool_result.get("ok"),
         "tool_name": tool_result.get("tool_name"),
         "summary": tool_result.get("summary"),
-        "result": tool_result.get("normalized"),
+        "result": tool_result.get("result"),
     }
 
 

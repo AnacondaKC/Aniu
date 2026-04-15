@@ -36,7 +36,6 @@ class Settings(BaseSettings):
     )
 
     scheduler_poll_seconds: int = Field(default=15, alias="SCHEDULER_POLL_SECONDS")
-    app_login_username: str | None = Field(default=None, alias="APP_LOGIN_USERNAME")
     app_login_password: str | None = Field(default=None, alias="APP_LOGIN_PASSWORD")
     jwt_secret: str = Field(
         default_factory=lambda: secrets.token_urlsafe(32), alias="JWT_SECRET"
@@ -50,7 +49,6 @@ class Settings(BaseSettings):
         "mx_apikey",
         "openai_base_url",
         "openai_api_key",
-        "app_login_username",
         "app_login_password",
         mode="before",
     )

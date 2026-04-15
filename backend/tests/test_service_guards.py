@@ -156,7 +156,7 @@ def test_execute_tool_adds_guidance_for_api_key_error() -> None:
     assert "请检查 MX_APIKEY" in result["error"]
 
 
-def test_screen_tool_includes_query_templates_in_normalized() -> None:
+def test_screen_tool_returns_raw_result_without_normalized() -> None:
     class StubClient:
         def screen_stocks(self, query):
             del query
@@ -191,5 +191,6 @@ def test_screen_tool_includes_query_templates_in_normalized() -> None:
     )
 
     assert result["ok"] is True
-    assert result["normalized"]["query_templates"]
-    assert result["normalized"]["candidates"][0]["代码"] == "300059"
+    assert "normalized" not in result
+    rows = result["result"]["data"]["data"]["allResults"]["result"]["dataList"]
+    assert rows[0]["SECURITY_CODE"] == "300059"

@@ -3,11 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from app.services.mx_service import (
-    MXClient,
-    extract_available_balance,
-    extract_candidates,
-)
+from app.services.mx_service import MXClient
 
 
 _ORDER_STATUS_MAP: dict[str, str] = {
@@ -348,9 +344,6 @@ class MXSkillService:
                 "ok": False,
                 "tool_name": tool_name,
                 "error": f"{str(exc)}{guidance}",
-                "normalized": {
-                    "query_templates": _QUERY_TEMPLATES.get(tool_name, []),
-                },
             }
 
     def _handle_query_market(
@@ -358,16 +351,10 @@ class MXSkillService:
     ) -> dict[str, Any]:
         query = self._resolve_query(arguments, app_settings)
         result = client.query_market(query)
-        tables = self._extract_market_tables(result)
         return {
             "ok": True,
             "tool_name": "mx_query_market",
-            "summary": f"已查询市场数据：{query}，返回 {len(tables)} 张数据表。",
-            "normalized": {
-                "query": query,
-                "query_templates": _QUERY_TEMPLATES["mx_query_market"],
-                "tables": tables,
-            },
+            "summary": f"已查询市场数据：{query}。",
             "result": result,
         }
 
@@ -376,16 +363,10 @@ class MXSkillService:
     ) -> dict[str, Any]:
         query = self._resolve_query(arguments, app_settings)
         result = client.search_news(query)
-        items = self._extract_news_items(result)
         return {
             "ok": True,
             "tool_name": "mx_search_news",
-            "summary": f"已查询资讯：{query}，返回 {len(items)} 条摘要结果。",
-            "normalized": {
-                "query": query,
-                "query_templates": _QUERY_TEMPLATES["mx_search_news"],
-                "items": items,
-            },
+            "summary": f"已查询资讯：{query}。",
             "result": result,
         }
 
@@ -394,18 +375,10 @@ class MXSkillService:
     ) -> dict[str, Any]:
         query = self._resolve_query(arguments, app_settings)
         result = client.screen_stocks(query)
-        candidates = self._extract_screen_candidates(result, limit=20)
-        total = self._extract_screen_total(result)
         return {
             "ok": True,
             "tool_name": "mx_screen_stocks",
-            "summary": f"已执行选股：{query}，候选股总数 {total if total is not None else '未知'}。",
-            "normalized": {
-                "query": query,
-                "query_templates": _QUERY_TEMPLATES["mx_screen_stocks"],
-                "total": total,
-                "candidates": candidates,
-            },
+            "summary": f"已执行选股：{query}。",
             "result": result,
         }
 
@@ -414,27 +387,10 @@ class MXSkillService:
     ) -> dict[str, Any]:
         del app_settings, arguments
         result = client.get_positions()
-        rows = self._extract_common_rows(result)
-        positions = [
-            {
-                "symbol": row.get("stockCode") or row.get("SECURITY_CODE"),
-                "name": row.get("stockName") or row.get("SECURITY_SHORT_NAME"),
-                "volume": row.get("count"),
-                "available": row.get("availCount"),
-                "cost_price": row.get("costPrice"),
-                "current_price": row.get("currentPrice"),
-                "market_value": row.get("marketValue"),
-                "profit": row.get("income"),
-                "profit_ratio": row.get("incomeRate"),
-            }
-            for row in rows[:20]
-            if isinstance(row, dict)
-        ]
         return {
             "ok": True,
             "tool_name": "mx_get_positions",
-            "summary": f"已查询持仓，当前返回 {len(positions)} 条持仓记录。",
-            "normalized": {"count": len(positions), "positions": positions},
+            "summary": "已查询持仓。",
             "result": result,
         }
 
@@ -443,29 +399,10 @@ class MXSkillService:
     ) -> dict[str, Any]:
         del app_settings, arguments
         result = client.get_balance()
-        data = result.get("data") if isinstance(result, dict) else {}
-        normalized = {
-            "available_balance": extract_available_balance(result),
-            "total_assets": self._extract_first_number(
-                data,
-                "totalAsset",
-                "totalAssets",
-                "asset",
-                "totalMoney",
-            ),
-            "market_value": self._extract_first_number(
-                data,
-                "marketValue",
-                "stockMarketValue",
-                "positionValue",
-                "totalPosValue",
-            ),
-        }
         return {
             "ok": True,
             "tool_name": "mx_get_balance",
             "summary": "已查询账户资金。",
-            "normalized": normalized,
             "result": result,
         }
 
@@ -474,27 +411,10 @@ class MXSkillService:
     ) -> dict[str, Any]:
         del app_settings, arguments
         result = client.get_orders()
-        rows = self._extract_common_rows(result)
-        orders = [
-            {
-                "order_id": row.get("orderId"),
-                "symbol": row.get("stockCode") or row.get("SECURITY_CODE"),
-                "name": row.get("stockName") or row.get("SECURITY_SHORT_NAME"),
-                "side": "买入" if str(row.get("orderDrt") or "") == "1" else "卖出",
-                "status": _order_status_text(row.get("orderStatus")),
-                "order_price": row.get("orderPrice"),
-                "order_qty": row.get("orderCount"),
-                "filled_qty": row.get("dealCount"),
-                "filled_price": row.get("dealPrice"),
-            }
-            for row in rows[:20]
-            if isinstance(row, dict)
-        ]
         return {
             "ok": True,
             "tool_name": "mx_get_orders",
-            "summary": f"已查询委托记录，当前返回 {len(orders)} 条。",
-            "normalized": {"count": len(orders), "orders": orders},
+            "summary": "已查询委托记录。",
             "result": result,
         }
 
@@ -503,15 +423,10 @@ class MXSkillService:
     ) -> dict[str, Any]:
         del app_settings, arguments
         result = client.get_self_selects()
-        stocks = self._extract_self_select_rows(result)
         return {
             "ok": True,
             "tool_name": "mx_get_self_selects",
-            "summary": f"已查询自选股列表，当前返回 {len(stocks)} 只股票。",
-            "normalized": {
-                "count": len(stocks),
-                "stocks": stocks[:20],
-            },
+            "summary": "已查询自选股列表。",
             "result": result,
         }
 
@@ -524,10 +439,6 @@ class MXSkillService:
             "ok": True,
             "tool_name": "mx_manage_self_select",
             "summary": f"已执行自选股操作：{query}",
-            "normalized": {
-                "query": query,
-                "query_templates": _QUERY_TEMPLATES["mx_manage_self_select"],
-            },
             "result": result,
             "executed_action": {
                 "action": "MANAGE_SELF_SELECT",
@@ -581,13 +492,6 @@ class MXSkillService:
             "ok": True,
             "tool_name": "mx_moni_trade",
             "summary": f"已提交{action}委托：{symbol} {quantity} 股。",
-            "normalized": {
-                "symbol": symbol,
-                "action": action,
-                "quantity": quantity,
-                "price_type": price_type,
-                "price": price,
-            },
             "result": result,
             "executed_action": {
                 "symbol": symbol,
@@ -625,11 +529,6 @@ class MXSkillService:
             "summary": "已提交撤单请求。"
             if cancel_type == "all"
             else f"已提交撤单请求：{order_id}",
-            "normalized": {
-                "cancel_type": cancel_type,
-                "order_id": order_id,
-                "stock_code": stock_code,
-            },
             "result": result,
             "executed_action": {
                 "action": "CANCEL",
@@ -648,169 +547,6 @@ class MXSkillService:
         if fallback:
             return fallback
         raise RuntimeError("缺少 query 参数。")
-
-    def _extract_market_tables(
-        self, payload: dict[str, Any]
-    ) -> list[dict[str, Any]]:
-        inner = (
-            ((payload.get("data") or {}).get("data") or {})
-        )
-        sdr = inner.get("searchDataResultDTO") or {}
-        raw_tables = sdr.get("dataTableDTOList") or []
-        tables: list[dict[str, Any]] = []
-        for tbl in raw_tables:
-            if not isinstance(tbl, dict):
-                continue
-            name_map: dict[str, str] = tbl.get("nameMap") or {}
-            indicator_order: list[str] = tbl.get("indicatorOrder") or []
-            # Use indicatorOrder to define column sequence; fall back to nameMap keys
-            col_keys = [k for k in indicator_order if k in name_map] or list(name_map.keys())
-            columns = [name_map[k] for k in col_keys]
-
-            tbl_data = tbl.get("table") or {}
-            raw_rows: list[Any] = []
-            if isinstance(tbl_data, dict):
-                raw_rows = tbl_data.get("dataList") or tbl_data.get("rows") or []
-
-            rows: list[dict[str, Any]] = []
-            for row in raw_rows[:20]:
-                if not isinstance(row, dict):
-                    continue
-                rows.append({name_map.get(k, k): row.get(k) for k in col_keys if k in row})
-
-            tables.append(
-                {
-                    "title": tbl.get("frontendTitle") or tbl.get("title"),
-                    "entity": tbl.get("frontendEntityName"),
-                    "columns": columns,
-                    "rows": rows,
-                }
-            )
-        return tables
-
-    def _extract_news_items(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        data = ((payload.get("data") or {}).get("data") or {}).get(
-            "llmSearchResponse"
-        ) or {}
-        rows = data.get("data") or []
-        items: list[dict[str, Any]] = []
-        for row in rows[:10]:
-            if not isinstance(row, dict):
-                continue
-            items.append(
-                {
-                    "title": row.get("title"),
-                    "date": row.get("date"),
-                    "type": row.get("informationType"),
-                    "entity": row.get("entityFullName"),
-                    "institution": row.get("insName"),
-                    "rating": row.get("rating"),
-                }
-            )
-        return items
-
-    def _extract_screen_candidates(
-        self, payload: dict[str, Any], limit: int = 20
-    ) -> list[dict[str, Any]]:
-        res = (
-            ((payload.get("data") or {}).get("data") or {})
-            .get("allResults") or {}
-        ).get("result") or {}
-        columns: list[dict[str, Any]] = res.get("columns") or []
-        rows: list[Any] = res.get("dataList") or []
-
-        # Build key→title map from columns definition
-        key_title: dict[str, str] = {
-            col["key"]: col.get("title", col["key"])
-            for col in columns
-            if isinstance(col, dict) and col.get("key")
-        }
-
-        # Core fields to always include when present
-        _CORE = {
-            "SECURITY_CODE", "SECURITY_SHORT_NAME", "NEWEST_PRICE", "CHG",
-        }
-        # Additional enrichment fields (dynamic keys with date suffixes)
-        _ENRICHMENT_PREFIXES = (
-            "010000_CIRCULATION_MARKET_VALUE",
-            "010000_PB",
-            "010000_TURNOVER_RATE",
-            "010000_LIANGBI",
-            "010000_RPT_F10_ORG_BASICINFO_BOARD_NAME_TOTAL",
-        )
-
-        selected_keys = [
-            k for k in key_title
-            if k in _CORE
-            or any(k.startswith(p) for p in _ENRICHMENT_PREFIXES)
-        ]
-
-        candidates: list[dict[str, Any]] = []
-        for row in rows[:limit]:
-            if not isinstance(row, dict):
-                continue
-            entry: dict[str, Any] = {}
-            for k in selected_keys:
-                if k in row:
-                    entry[key_title.get(k, k)] = row[k]
-            if entry:
-                candidates.append(entry)
-        return candidates
-
-    def _extract_screen_total(self, payload: dict[str, Any]) -> int | None:
-        result = (
-            ((payload.get("data") or {}).get("data") or {}).get("allResults") or {}
-        ).get("result") or {}
-        total = result.get("total") or result.get("totalRecordCount")
-        try:
-            return int(total) if total is not None else None
-        except (TypeError, ValueError):
-            return None
-
-    def _extract_common_rows(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        data = payload.get("data")
-        if isinstance(data, dict):
-            rows = data.get("data") or data.get("rows") or data.get("list") or []
-            return [row for row in rows if isinstance(row, dict)]
-        if isinstance(data, list):
-            return [row for row in data if isinstance(row, dict)]
-        return []
-
-    def _extract_self_select_rows(
-        self, payload: dict[str, Any]
-    ) -> list[dict[str, Any]]:
-        result = ((payload.get("data") or {}).get("allResults") or {}).get(
-            "result"
-        ) or {}
-        rows = result.get("dataList") or []
-        stocks: list[dict[str, Any]] = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            stocks.append(
-                {
-                    "symbol": row.get("SECURITY_CODE"),
-                    "name": row.get("SECURITY_SHORT_NAME"),
-                    "latest_price": row.get("NEWEST_PRICE"),
-                    "change_percent": row.get("CHG"),
-                    "turnover_rate": row.get("010000_TURNOVER_RATE"),
-                    "volume_ratio": row.get("010000_LIANGBI"),
-                }
-            )
-        return stocks
-
-    def _extract_first_number(self, payload: Any, *keys: str) -> float | None:
-        if not isinstance(payload, dict):
-            return None
-        for key in keys:
-            value = payload.get(key)
-            if value is None:
-                continue
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                continue
-        return None
 
     def _build_error_guidance(self, message: str) -> str:
         text = str(message or "").strip()

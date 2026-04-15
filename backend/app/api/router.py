@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/aniu", tags=["aniu"])
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest) -> LoginResponse:
     try:
-        return aniu_service.authenticate_login(payload.username, payload.password)
+        return aniu_service.authenticate_login(payload.password)
     except RuntimeError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 

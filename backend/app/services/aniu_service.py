@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
@@ -197,23 +198,19 @@ class AniuService:
 
         return "analysis"
 
-    def authenticate_login(self, username: str, password: str) -> dict[str, Any]:
+    def authenticate_login(self, password: str) -> dict[str, Any]:
         settings = get_settings()
-        expected_username = settings.app_login_username
         expected_password = settings.app_login_password
 
-        if not expected_username or not expected_password:
-            raise RuntimeError(
-                "未配置登录账号，请先设置 APP_LOGIN_USERNAME 和 APP_LOGIN_PASSWORD。"
-            )
+        if not expected_password:
+            raise RuntimeError("未配置登录密码，请先设置 APP_LOGIN_PASSWORD。")
 
-        if username.strip() != expected_username or password != expected_password:
-            raise RuntimeError("用户名或密码错误。")
+        if password != expected_password:
+            raise RuntimeError("密码错误。")
 
-        token = create_access_token(expected_username)
+        token = create_access_token("single-user")
         return {
             "authenticated": True,
-            "username": expected_username,
             "token": token,
         }
 
@@ -452,6 +449,7 @@ class AniuService:
             or None
         )
         run.api_details = self._build_run_api_details(run)
+        run.raw_tool_previews = self._build_raw_tool_previews(run)
         run.trade_details = self._build_run_trade_details(run)
 
     def _format_token_count(self, value: int) -> str:
@@ -565,13 +563,51 @@ class AniuService:
     def _build_run_api_details(self, run: StrategyRun) -> list[dict[str, str]]:
         trade_tool_names = {"mx_moni_trade", "mx_moni_cancel"}
         results: list[dict[str, str]] = []
-        for item in self._get_detail_tool_calls(run):
+        for idx, item in enumerate(self._get_detail_tool_calls(run)):
             tool_name = str(item.get("name") or "")
             if tool_name in trade_tool_names:
                 continue
             tool_text = self._get_api_tool_text(tool_name)
-            results.append(tool_text)
+            results.append(
+                {
+                    "tool_name": tool_name,
+                    "name": tool_text["name"],
+                    "summary": tool_text["summary"],
+                    "preview_index": idx,
+                }
+            )
         return results
+
+    def _build_raw_tool_previews(self, run: StrategyRun) -> list[dict[str, str]]:
+        previews: list[dict[str, str]] = []
+        for idx, item in enumerate(self._get_detail_tool_calls(run)):
+            tool_name = str(item.get("name") or "")
+            tool_text = self._get_api_tool_text(tool_name)
+            result = item.get("result")
+            if not isinstance(result, dict):
+                continue
+            raw_payload = result.get("result")
+            preview_source = raw_payload if raw_payload is not None else result
+            previews.append(
+                {
+                    "preview_index": idx,
+                    "tool_name": tool_name,
+                    "display_name": tool_text["name"],
+                    "summary": str(result.get("summary") or tool_text["summary"]),
+                    "preview": self._format_tool_preview(preview_source),
+                }
+            )
+        return previews
+
+    def _format_tool_preview(self, payload: Any, max_chars: int = 6000) -> str:
+        try:
+            text = json.dumps(payload, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            text = str(payload)
+        text = text.strip()
+        if len(text) <= max_chars:
+            return text
+        return text[: max_chars - 16].rstrip() + "\n...\n<已截断>"
 
     def _extract_trade_name(self, payload: Any) -> str:
         if not isinstance(payload, dict):
@@ -605,26 +641,30 @@ class AniuService:
         return f"挂单{action_text}{display_symbol}共计{volume}股。"
 
     def _build_run_trade_details(self, run: StrategyRun) -> list[dict[str, Any]]:
+        tool_calls = self._get_detail_tool_calls(run)
         if run.trade_orders:
-            return [
-                {
-                    "action": "sell" if str(order.action).upper() == "SELL" else "buy",
-                    "action_text": "模拟卖出" if str(order.action).upper() == "SELL" else "模拟买入",
-                    "symbol": order.symbol,
-                    "name": self._extract_trade_name(order.response_payload) or order.symbol,
-                    "volume": int(order.quantity),
-                    "price": order.price,
-                    "amount": round(float(order.price or 0) * int(order.quantity), 2)
-                    if order.price is not None
-                    else None,
-                    "summary": self._get_trade_summary(
-                        "sell" if str(order.action).upper() == "SELL" else "buy",
-                        order.symbol,
-                        int(order.quantity),
-                    ),
-                }
-                for order in run.trade_orders
-            ]
+            details: list[dict[str, Any]] = []
+            for order in run.trade_orders:
+                action_name = str(order.action).upper()
+                trade_action = "sell" if action_name == "SELL" else "buy"
+                tool_name = self._match_trade_tool_name(tool_calls, order.symbol, action_name)
+                details.append(
+                    {
+                        "action": trade_action,
+                        "action_text": "模拟卖出" if action_name == "SELL" else "模拟买入",
+                        "symbol": order.symbol,
+                        "name": self._extract_trade_name(order.response_payload) or order.symbol,
+                        "volume": int(order.quantity),
+                        "price": order.price,
+                        "amount": round(float(order.price or 0) * int(order.quantity), 2)
+                        if order.price is not None
+                        else None,
+                        "summary": self._get_trade_summary(trade_action, order.symbol, int(order.quantity)),
+                        "tool_name": tool_name,
+                        "preview_index": self._find_tool_call_index(tool_calls, tool_name, order.symbol),
+                    }
+                )
+            return details
 
         executed_actions = run.executed_actions if isinstance(run.executed_actions, list) else []
         details: list[dict[str, Any]] = []
@@ -638,6 +678,7 @@ class AniuService:
             price = _parse_float(action.get("price"))
             volume = int(action.get("quantity") or 0)
             symbol = str(action.get("symbol") or "--")
+            tool_name = self._match_trade_tool_name(tool_calls, symbol, action_name)
             details.append(
                 {
                     "action": trade_action,
@@ -648,9 +689,57 @@ class AniuService:
                     "price": price,
                     "amount": round((price or 0) * volume, 2) if price is not None else None,
                     "summary": self._get_trade_summary(trade_action, symbol, volume),
+                    "tool_name": tool_name,
+                    "preview_index": self._find_tool_call_index(tool_calls, tool_name, symbol),
                 }
             )
         return details
+
+    def _match_trade_tool_name(
+        self, tool_calls: list[dict[str, Any]], symbol: str, action_name: str
+    ) -> str | None:
+        desired_name = "mx_moni_trade"
+        target_symbol = str(symbol or "").strip()
+        target_action = str(action_name or "").upper()
+        for item in reversed(tool_calls):
+            tool_name = str(item.get("name") or "")
+            if tool_name != desired_name:
+                continue
+            result = item.get("result")
+            if not isinstance(result, dict):
+                continue
+            executed_action = result.get("executed_action")
+            if not isinstance(executed_action, dict):
+                continue
+            if str(executed_action.get("symbol") or "").strip() != target_symbol:
+                continue
+            if str(executed_action.get("action") or "").upper() != target_action:
+                continue
+            return tool_name
+        return None
+
+    def _find_tool_call_index(
+        self,
+        tool_calls: list[dict[str, Any]],
+        tool_name: str | None,
+        symbol: str | None = None,
+    ) -> int | None:
+        if not tool_name:
+            return None
+        target_symbol = str(symbol or "").strip()
+        for idx in range(len(tool_calls) - 1, -1, -1):
+            item = tool_calls[idx]
+            if str(item.get("name") or "") != tool_name:
+                continue
+            if not target_symbol:
+                return idx
+            result = item.get("result")
+            if not isinstance(result, dict):
+                continue
+            executed_action = result.get("executed_action")
+            if isinstance(executed_action, dict) and str(executed_action.get("symbol") or "").strip() == target_symbol:
+                return idx
+        return None
 
     def _get_run_token_usage(self, run: StrategyRun) -> dict[str, int | None]:
         response_usage = self._extract_usage(run.llm_response_payload)

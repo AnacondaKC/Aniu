@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 
-import type { ApiDetail, RunDetail, RunSummary, RunSummaryPage, TradeDetail, TradeOrder } from '@/types'
+import type { ApiDetail, RawToolPreview, RunDetail, RunSummary, RunSummaryPage, TradeDetail, TradeOrder } from '@/types'
 
 export interface AnalysisRunViewModel {
   id: number
@@ -15,6 +15,7 @@ export interface AnalysisRunViewModel {
   outputTokens: string
   totalTokens: string
   apiDetails: ApiDetail[]
+  rawToolPreviews: RawToolPreview[]
   tradeDetails: TradeDetail[]
   output: string | null
   summary: string
@@ -167,8 +168,10 @@ function mapApiDetails(detail: RunDetail): ApiDetail[] {
     .map((item) => {
       const toolText = getApiToolText(String(item.name ?? ''))
       return {
+        tool_name: String(item.name ?? ''),
         name: toolText.label,
         summary: toolText.summary,
+        preview_index: null,
       }
     })
 }
@@ -189,6 +192,8 @@ function mapTradeDetails(tradeOrders: TradeOrder[], executedActions: Array<Recor
         price,
         amount,
         summary: getTradeSummary(action, order.symbol, name, order.quantity, price, amount),
+        tool_name: null,
+        preview_index: null,
       }
     })
   }
@@ -212,6 +217,8 @@ function mapTradeDetails(tradeOrders: TradeOrder[], executedActions: Array<Recor
       price,
       amount,
       summary: getTradeSummary(actionType, symbol, name, volume, price, amount),
+      tool_name: null,
+      preview_index: null,
     }
     })
 }
@@ -230,6 +237,7 @@ function mapRunSummaryToViewModel(summary: RunSummary): AnalysisRunViewModel {
     outputTokens: formatTokenValue(summary.output_tokens),
     totalTokens: formatTokenValue(summary.total_tokens),
     apiDetails: [],
+    rawToolPreviews: [],
     tradeDetails: [],
     output: null,
     summary: summary.analysis_summary || '--',
@@ -240,6 +248,7 @@ function mapRunSummaryToViewModel(summary: RunSummary): AnalysisRunViewModel {
 function mapRunDetailToViewModel(detail: RunDetail): AnalysisRunViewModel {
   const tokenUsage = getTokenUsage(detail)
   const apiDetails = detail.api_details?.length ? detail.api_details : mapApiDetails(detail)
+  const rawToolPreviews = Array.isArray(detail.raw_tool_previews) ? detail.raw_tool_previews : []
   const tradeDetails = detail.trade_details?.length ? detail.trade_details : mapTradeDetails(detail.trade_orders, detail.executed_actions)
   const output = detail.output_markdown || detail.final_answer || detail.analysis_summary || detail.error_message || '暂无分析输出'
 
@@ -256,6 +265,7 @@ function mapRunDetailToViewModel(detail: RunDetail): AnalysisRunViewModel {
     outputTokens: tokenUsage.output,
     totalTokens: tokenUsage.total,
     apiDetails,
+    rawToolPreviews,
     tradeDetails,
     output,
     summary: detail.analysis_summary || '--',

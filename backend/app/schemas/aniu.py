@@ -83,8 +83,18 @@ class TradeOrderRead(BaseModel):
 
 
 class ApiDetailRead(BaseModel):
+    tool_name: str
     name: str
     summary: str
+    preview_index: int | None = None
+
+
+class RawToolPreviewRead(BaseModel):
+    preview_index: int
+    tool_name: str
+    display_name: str
+    summary: str
+    preview: str
 
 
 class TradeDetailRead(BaseModel):
@@ -96,6 +106,8 @@ class TradeDetailRead(BaseModel):
     price: float | None = None
     amount: float | None = None
     summary: str
+    tool_name: str | None = None
+    preview_index: int | None = None
 
 
 class RunSummaryRead(BaseModel):
@@ -123,6 +135,7 @@ class RunDetailRead(RunSummaryRead):
     final_answer: str | None = None
     output_markdown: str | None = None
     api_details: list[ApiDetailRead] = Field(default_factory=list)
+    raw_tool_previews: list[RawToolPreviewRead] = Field(default_factory=list)
     trade_details: list[TradeDetailRead] = Field(default_factory=list)
     decision_payload: dict[str, Any] | None = None
     executed_actions: list[dict[str, Any]] | None = None
@@ -256,11 +269,9 @@ class ChatResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=1)
     password: str = Field(min_length=1)
 
 
 class LoginResponse(BaseModel):
     authenticated: bool
-    username: str
     token: str | None = None

@@ -45,6 +45,7 @@ export interface RunDetail extends RunSummary {
   final_answer: string | null
   output_markdown: string | null
   api_details: ApiDetail[]
+  raw_tool_previews: RawToolPreview[]
   trade_details: TradeDetail[]
   decision_payload: Record<string, unknown> | null
   executed_actions: Array<Record<string, unknown>> | null
@@ -55,8 +56,18 @@ export interface RunDetail extends RunSummary {
 }
 
 export interface ApiDetail {
+  tool_name: string
   name: string
   summary: string
+  preview_index: number | null
+}
+
+export interface RawToolPreview {
+  preview_index: number
+  tool_name: string
+  display_name: string
+  summary: string
+  preview: string
 }
 
 export interface TradeDetail {
@@ -68,6 +79,8 @@ export interface TradeDetail {
   price: number | null
   amount: number | null
   summary: string
+  tool_name: string | null
+  preview_index: number | null
 }
 
 export interface RunSummaryPage {
@@ -200,12 +213,10 @@ export interface ChatResponse {
 }
 
 export interface LoginRequest {
-  username: string
   password: string
 }
 
 export interface LoginResponse {
   authenticated: boolean
-  username: string
   token: string | null
 }
