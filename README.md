@@ -1,10 +1,10 @@
 <div align="center">
 
-# Aniu——科技牛牛带你猛猛干A股
+# Aniu——科技牛牛带你狠狠干A股（GPT版）
 
 <img width="120" alt="Aniu icon" src="./frontend/public/aniu.ico" />
 
-**面向 A 股 / 港股的智能分析与模拟交易系统**
+**面向 A 股的智能分析与模拟交易系统**
 
 [![Stars][stars-shield]][repo-link]
 [![Forks][forks-shield]][repo-link]
