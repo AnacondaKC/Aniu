@@ -27,9 +27,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN addgroup --system app \
-    && adduser --system --ingroup app app
-
 COPY backend/requirements.txt ./requirements.txt
 RUN python -m pip install --upgrade pip \
     && pip install -r requirements.txt
@@ -39,10 +36,7 @@ COPY backend/.env.example ./.env.example
 COPY --from=frontend-build /build/frontend/dist ./static
 
 RUN mkdir -p /app/data \
-    && test -f /app/app/data/trading_calendar.json \
-    && chown -R app:app /app
-
-USER app
+    && test -f /app/app/data/trading_calendar.json
 
 EXPOSE 8000
 
