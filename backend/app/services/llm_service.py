@@ -192,6 +192,29 @@ class LLMService:
             "tool_choice": "auto",
         }
 
+    def build_request_payload_from_messages(
+        self,
+        *,
+        app_settings: Any,
+        messages: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        run_type = str(getattr(app_settings, "run_type", "analysis") or "analysis")
+        system_prompt = self._augment_system_prompt(
+            app_settings.system_prompt,
+            run_type=run_type,
+        )
+        payload_messages: list[dict[str, Any]] = []
+        if system_prompt:
+            payload_messages.append({"role": "system", "content": system_prompt})
+        payload_messages.extend(dict(message) for message in messages)
+        return {
+            "model": app_settings.llm_model,
+            "temperature": _LLM_TEMPERATURE,
+            "messages": payload_messages,
+            "tools": skill_registry.build_tools(run_type=run_type),
+            "tool_choice": "auto",
+        }
+
     @staticmethod
     def _augment_system_prompt(
         base_prompt: str | None,
@@ -213,7 +236,30 @@ class LLMService:
         client: MXClient,
         emit: Any = None,
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-        request_payload = self.build_initial_request_payload(app_settings)
+        return self.run_agent_with_messages(
+            app_settings=app_settings,
+            client=client,
+            messages=[
+                {
+                    "role": "user",
+                    "content": getattr(app_settings, "task_prompt", ""),
+                }
+            ],
+            emit=emit,
+        )
+
+    def run_agent_with_messages(
+        self,
+        *,
+        app_settings: Any,
+        client: MXClient,
+        messages: list[dict[str, Any]],
+        emit: Any = None,
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+        request_payload = self.build_request_payload_from_messages(
+            app_settings=app_settings,
+            messages=messages,
+        )
         if not app_settings.llm_base_url or not app_settings.llm_api_key:
             raise RuntimeError("未配置大模型接口，无法执行 AI 调度。")
 

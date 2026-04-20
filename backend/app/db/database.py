@@ -42,8 +42,12 @@ def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
     _ensure_app_settings_columns(engine)
+    _ensure_chat_session_columns(engine)
+    _ensure_chat_message_columns(engine)
     _ensure_strategy_schedule_columns(engine)
     _ensure_strategy_run_columns(engine)
+    _ensure_chat_session_indexes(engine)
+    _ensure_chat_message_indexes(engine)
     _ensure_strategy_run_indexes(engine)
     _backfill_schedule_run_types(engine)
     _backfill_strategy_run_types(engine)
@@ -63,12 +67,109 @@ def _ensure_app_settings_columns(engine) -> None:
         statements.append(
             "ALTER TABLE app_settings ADD COLUMN disabled_skill_ids_json TEXT DEFAULT '[]'"
         )
+    if "automation_session_id" not in columns:
+        statements.append("ALTER TABLE app_settings ADD COLUMN automation_session_id INTEGER")
+    if "automation_context_window_tokens" not in columns:
+        statements.append(
+            "ALTER TABLE app_settings ADD COLUMN automation_context_window_tokens INTEGER DEFAULT 65536"
+        )
+    if "automation_target_prompt_tokens" not in columns:
+        statements.append(
+            "ALTER TABLE app_settings ADD COLUMN automation_target_prompt_tokens INTEGER DEFAULT 24000"
+        )
+    if "automation_recent_message_limit" not in columns:
+        statements.append(
+            "ALTER TABLE app_settings ADD COLUMN automation_recent_message_limit INTEGER DEFAULT 24"
+        )
+    if "automation_enable_auto_compaction" not in columns:
+        statements.append(
+            "ALTER TABLE app_settings ADD COLUMN automation_enable_auto_compaction BOOLEAN DEFAULT 1"
+        )
+    if "automation_idle_summary_hours" not in columns:
+        statements.append(
+            "ALTER TABLE app_settings ADD COLUMN automation_idle_summary_hours INTEGER DEFAULT 12"
+        )
+    if "automation_context_source" not in columns:
+        statements.append(
+            "ALTER TABLE app_settings ADD COLUMN automation_context_source VARCHAR(32) DEFAULT 'default'"
+        )
+    if "automation_context_detected_at" not in columns:
+        statements.append(
+            "ALTER TABLE app_settings ADD COLUMN automation_context_detected_at DATETIME"
+        )
 
     if not statements:
         return
 
     with engine.begin() as connection:
         for statement in statements:
+            connection.execute(text(statement))
+        connection.execute(
+            text(
+                "UPDATE app_settings SET automation_context_window_tokens = COALESCE(automation_context_window_tokens, 65536), "
+                "automation_target_prompt_tokens = COALESCE(automation_target_prompt_tokens, 24000), "
+                "automation_recent_message_limit = COALESCE(automation_recent_message_limit, 24), "
+                "automation_enable_auto_compaction = COALESCE(automation_enable_auto_compaction, 1), "
+                "automation_idle_summary_hours = COALESCE(automation_idle_summary_hours, 12), "
+                "automation_context_source = COALESCE(NULLIF(trim(automation_context_source), ''), 'default')"
+            )
+        )
+
+
+def _ensure_chat_session_columns(engine) -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "chat_sessions" not in table_names:
+        return
+
+    required_columns = {
+        "kind": "ALTER TABLE chat_sessions ADD COLUMN kind VARCHAR(32) DEFAULT 'user'",
+        "slug": "ALTER TABLE chat_sessions ADD COLUMN slug VARCHAR(120)",
+        "archived_summary": "ALTER TABLE chat_sessions ADD COLUMN archived_summary TEXT",
+        "summary_updated_at": "ALTER TABLE chat_sessions ADD COLUMN summary_updated_at DATETIME",
+        "last_compacted_message_id": "ALTER TABLE chat_sessions ADD COLUMN last_compacted_message_id INTEGER",
+        "last_compacted_run_id": "ALTER TABLE chat_sessions ADD COLUMN last_compacted_run_id INTEGER",
+        "summary_revision": "ALTER TABLE chat_sessions ADD COLUMN summary_revision INTEGER DEFAULT 0",
+    }
+
+    with engine.begin() as connection:
+        for column_name, statement in required_columns.items():
+            current_columns = {
+                column["name"]
+                for column in inspect(connection).get_columns("chat_sessions")
+            }
+            if column_name in current_columns:
+                continue
+            connection.execute(text(statement))
+        connection.execute(
+            text(
+                "UPDATE chat_sessions SET kind = COALESCE(NULLIF(trim(kind), ''), 'user'), "
+                "summary_revision = COALESCE(summary_revision, 0)"
+            )
+        )
+
+
+def _ensure_chat_message_columns(engine) -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "chat_messages" not in table_names:
+        return
+
+    required_columns = {
+        "source": "ALTER TABLE chat_messages ADD COLUMN source VARCHAR(32)",
+        "run_id": "ALTER TABLE chat_messages ADD COLUMN run_id INTEGER",
+        "message_kind": "ALTER TABLE chat_messages ADD COLUMN message_kind VARCHAR(32)",
+        "meta_payload": "ALTER TABLE chat_messages ADD COLUMN meta_payload JSON",
+    }
+
+    with engine.begin() as connection:
+        for column_name, statement in required_columns.items():
+            current_columns = {
+                column["name"]
+                for column in inspect(connection).get_columns("chat_messages")
+            }
+            if column_name in current_columns:
+                continue
             connection.execute(text(statement))
 
 
@@ -211,6 +312,12 @@ def _ensure_strategy_run_columns(engine) -> None:
         "final_answer": "ALTER TABLE strategy_runs ADD COLUMN final_answer TEXT",
         "run_type": "ALTER TABLE strategy_runs ADD COLUMN run_type VARCHAR(32) DEFAULT 'analysis'",
         "schedule_name": "ALTER TABLE strategy_runs ADD COLUMN schedule_name VARCHAR(64)",
+        "schedule_id": "ALTER TABLE strategy_runs ADD COLUMN schedule_id INTEGER",
+        "chat_session_id": "ALTER TABLE strategy_runs ADD COLUMN chat_session_id INTEGER",
+        "prompt_message_id": "ALTER TABLE strategy_runs ADD COLUMN prompt_message_id INTEGER",
+        "response_message_id": "ALTER TABLE strategy_runs ADD COLUMN response_message_id INTEGER",
+        "context_summary_version": "ALTER TABLE strategy_runs ADD COLUMN context_summary_version INTEGER",
+        "context_tokens_estimate": "ALTER TABLE strategy_runs ADD COLUMN context_tokens_estimate INTEGER",
     }
 
     with engine.begin() as connection:
@@ -241,6 +348,64 @@ def _ensure_strategy_run_indexes(engine) -> None:
         statements.append(
             "CREATE INDEX ix_strategy_runs_started_at ON strategy_runs (started_at)"
         )
+    if "ix_strategy_runs_chat_session_id" not in index_names:
+        statements.append(
+            "CREATE INDEX ix_strategy_runs_chat_session_id ON strategy_runs (chat_session_id)"
+        )
+    if "ix_strategy_runs_schedule_id" not in index_names:
+        statements.append(
+            "CREATE INDEX ix_strategy_runs_schedule_id ON strategy_runs (schedule_id)"
+        )
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
+def _ensure_chat_session_indexes(engine) -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "chat_sessions" not in table_names:
+        return
+
+    index_names = {
+        index["name"]
+        for index in inspector.get_indexes("chat_sessions")
+        if index.get("name")
+    }
+
+    statements: list[str] = []
+    if "ix_chat_sessions_kind" not in index_names:
+        statements.append("CREATE INDEX ix_chat_sessions_kind ON chat_sessions (kind)")
+    if "ix_chat_sessions_slug" not in index_names:
+        statements.append("CREATE INDEX ix_chat_sessions_slug ON chat_sessions (slug)")
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
+def _ensure_chat_message_indexes(engine) -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "chat_messages" not in table_names:
+        return
+
+    index_names = {
+        index["name"]
+        for index in inspector.get_indexes("chat_messages")
+        if index.get("name")
+    }
+
+    statements: list[str] = []
+    if "ix_chat_messages_run_id" not in index_names:
+        statements.append("CREATE INDEX ix_chat_messages_run_id ON chat_messages (run_id)")
 
     if not statements:
         return

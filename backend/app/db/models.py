@@ -47,6 +47,26 @@ class AppSettings(Base):
     )
     max_actions: Mapped[int] = mapped_column(Integer, default=2)
     trade_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    automation_session_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    automation_context_window_tokens: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=65536
+    )
+    automation_target_prompt_tokens: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=24000
+    )
+    automation_recent_message_limit: Mapped[int] = mapped_column(
+        Integer, default=24
+    )
+    automation_enable_auto_compaction: Mapped[bool] = mapped_column(
+        Boolean, default=True
+    )
+    automation_idle_summary_hours: Mapped[int] = mapped_column(Integer, default=12)
+    automation_context_source: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, default="default"
+    )
+    automation_context_detected_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -80,7 +100,13 @@ class StrategyRun(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     trigger_source: Mapped[str] = mapped_column(String(32), default="manual")
     run_type: Mapped[str] = mapped_column(String(32), default="analysis")
+    schedule_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     schedule_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    chat_session_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    prompt_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    response_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    context_summary_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    context_tokens_estimate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     analysis_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     final_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -129,6 +155,15 @@ class ChatSession(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(120), default="新对话")
+    kind: Mapped[str] = mapped_column(String(32), default="user", index=True)
+    slug: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    archived_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_compacted_message_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    last_compacted_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    summary_revision: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True
     )
@@ -155,6 +190,10 @@ class ChatMessageRecord(Base):
     )
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    run_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    message_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    meta_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSON, nullable=True
     )

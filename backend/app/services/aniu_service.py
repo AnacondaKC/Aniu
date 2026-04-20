@@ -21,12 +21,20 @@ from app.core.auth import create_access_token
 from app.core.config import get_settings
 from app.core.constants import DEFAULT_SYSTEM_PROMPT
 from app.db.database import session_scope
-from app.db.models import AppSettings, StrategyRun, StrategySchedule, TradeOrder
+from app.db.models import (
+    AppSettings,
+    ChatMessageRecord,
+    ChatSession,
+    StrategyRun,
+    StrategySchedule,
+    TradeOrder,
+)
 from app.schemas.aniu import AppSettingsUpdate, ChatRequest, ScheduleUpdate
 from app.services.event_bus import event_bus, make_emitter
 from app.services.llm_service import LLMStreamCancelled, llm_service
 from app.services.mx_skill_service import mx_skill_service
 from app.services.mx_service import MXClient
+from app.services.token_estimator import estimate_messages_tokens, estimate_text_tokens
 from app.services.trading_calendar_service import trading_calendar_service
 
 
@@ -42,6 +50,14 @@ ACCOUNT_PREFETCH_TOOL_NAMES = (
     "mx_get_orders",
 )
 ACCOUNT_OVERVIEW_CACHE_MAX_WORKERS = 3
+AUTOMATION_SESSION_SLUG = "automation-default"
+AUTOMATION_SESSION_TITLE = "自动化交易会话"
+AUTOMATION_DEFAULT_CONTEXT_WINDOW_TOKENS = 65536
+AUTOMATION_DEFAULT_TARGET_PROMPT_TOKENS = 24000
+AUTOMATION_DEFAULT_RECENT_MESSAGE_LIMIT = 24
+AUTOMATION_DEFAULT_IDLE_SUMMARY_HOURS = 12
+AUTOMATION_RESERVED_OUTPUT_TOKENS = 4000
+AUTOMATION_SAFETY_BUFFER_TOKENS = 2000
 
 
 def now_utc() -> datetime:
@@ -999,13 +1015,11 @@ class AniuService:
     def _fetch_live_account_payloads(
         self, client: MXClient
     ) -> dict[str, dict[str, Any]]:
-        with ThreadPoolExecutor(max_workers=ACCOUNT_OVERVIEW_CACHE_MAX_WORKERS) as executor:
-            futures = {
-                "balance": executor.submit(self._safe_call, client.get_balance),
-                "positions": executor.submit(self._safe_call, client.get_positions),
-                "orders": executor.submit(self._safe_call, client.get_orders),
-            }
-        return {name: future.result() for name, future in futures.items()}
+        return {
+            "balance": self._safe_call(client.get_balance),
+            "positions": self._safe_call(client.get_positions),
+            "orders": self._safe_call(client.get_orders),
+        }
 
     def get_account_overview(
         self,
@@ -1507,6 +1521,7 @@ class AniuService:
             run = StrategyRun(
                 trigger_source=trigger_source,
                 run_type=schedule.run_type if schedule else "analysis",
+                schedule_id=schedule.id if schedule else None,
                 schedule_name=schedule.name if schedule else None,
                 status="running",
             )
@@ -1526,10 +1541,40 @@ class AniuService:
                 "llm_api_key": settings.llm_api_key,
                 "llm_model": settings.llm_model,
                 "run_type": schedule.run_type if schedule else "analysis",
+                "schedule_id": schedule.id if schedule else None,
                 "system_prompt": settings.system_prompt,
                 "task_prompt": schedule.task_prompt if schedule else manual_task_prompt,
                 "timeout_seconds": int(
                     schedule.timeout_seconds if schedule else 1800
+                ),
+                "automation_session_id": getattr(
+                    settings, "automation_session_id", None
+                ),
+                "automation_context_window_tokens": getattr(
+                    settings,
+                    "automation_context_window_tokens",
+                    AUTOMATION_DEFAULT_CONTEXT_WINDOW_TOKENS,
+                ),
+                "automation_target_prompt_tokens": getattr(
+                    settings,
+                    "automation_target_prompt_tokens",
+                    AUTOMATION_DEFAULT_TARGET_PROMPT_TOKENS,
+                ),
+                "automation_recent_message_limit": getattr(
+                    settings,
+                    "automation_recent_message_limit",
+                    AUTOMATION_DEFAULT_RECENT_MESSAGE_LIMIT,
+                ),
+                "automation_enable_auto_compaction": getattr(
+                    settings, "automation_enable_auto_compaction", True
+                ),
+                "automation_idle_summary_hours": getattr(
+                    settings,
+                    "automation_idle_summary_hours",
+                    AUTOMATION_DEFAULT_IDLE_SUMMARY_HOURS,
+                ),
+                "automation_context_source": getattr(
+                    settings, "automation_context_source", "default"
                 ),
             }
         return run_id, settings_snapshot
@@ -1546,6 +1591,12 @@ class AniuService:
     ) -> StrategyRun | None:
         prefetched_tool_calls: list[dict[str, Any]] = []
         prefetched_context: str | None = None
+        automation_session_id: int | None = None
+        prompt_message_id: int | None = None
+        response_message_id: int | None = None
+        context_summary_version: int | None = None
+        context_tokens_estimate: int | None = None
+        automation_phase = "prefetch"
         _emit = emit if callable(emit) else (lambda *_a, **_kw: None)
 
         try:
@@ -1595,18 +1646,96 @@ class AniuService:
                         else prefetched_context
                     )
                 _emit("stage", stage="llm", message="正在调用大模型")
-                run_agent = llm_service.run_agent
-                if self._run_agent_supports_emit(run_agent):
-                    decision, llm_request, llm_response, runtime_trace = run_agent(
-                        settings,
-                        client,
-                        emit=_emit,
+                automation_phase = "llm"
+                if self._is_automation_trigger(trigger_source):
+                    with session_scope() as db:
+                        session = self._get_or_create_automation_session(db)
+                        previous_last_message_at = _assume_utc(session.last_message_at)
+                        archived_summary = session.archived_summary
+                        automation_session_id = session.id
+                        user_content = self._build_automation_user_content(
+                            settings=settings,
+                            trigger_source=trigger_source,
+                            schedule_id=schedule_id,
+                            schedule_name=getattr(settings, "schedule_name", None),
+                            run_type=str(getattr(settings, "run_type", "analysis") or "analysis"),
+                            task_prompt=str(getattr(settings, "task_prompt", "") or ""),
+                            prefetched_context=prefetched_context,
+                        )
+                        user_message = self._persist_automation_user_message(
+                            db=db,
+                            session=session,
+                            run_id=run_id,
+                            content=user_content,
+                            schedule_id=schedule_id,
+                            schedule_name=getattr(settings, "schedule_name", None),
+                            run_type=str(getattr(settings, "run_type", "analysis") or "analysis"),
+                            trigger_source=trigger_source,
+                        )
+                        prompt_message_id = user_message.id
+                        history_records = self._list_automation_history_records(
+                            db=db,
+                            session_id=session.id,
+                            recent_limit=int(
+                                getattr(settings, "automation_recent_message_limit", 0)
+                                or AUTOMATION_DEFAULT_RECENT_MESSAGE_LIMIT
+                            ),
+                        )
+                        history_messages = self._build_automation_history_messages(
+                            history_records
+                        )
+                        resume_block = self._build_resume_summary_block(
+                            idle_since=previous_last_message_at,
+                            archived_summary=archived_summary,
+                            settings=settings,
+                        )
+                        llm_messages = self._build_automation_prompt_messages(
+                            session=session,
+                            history_messages=history_messages,
+                            resume_block=resume_block,
+                        )
+                        context_tokens_estimate = self._estimate_automation_context_tokens(
+                            session=session,
+                            settings=settings,
+                            messages=llm_messages,
+                            resume_block=resume_block,
+                        )
+                        context_tokens_estimate = max(
+                            context_tokens_estimate,
+                            estimate_messages_tokens(history_messages),
+                        )
+                        with db.no_autoflush:
+                            run = db.get(StrategyRun, run_id)
+                            if run is not None:
+                                run.chat_session_id = session.id
+                                run.prompt_message_id = prompt_message_id
+                                run.context_tokens_estimate = context_tokens_estimate
+                                run.context_summary_version = int(
+                                    session.summary_revision or 0
+                                )
+                                db.add(run)
+                        context_summary_version = int(session.summary_revision or 0)
+                    decision, llm_request, llm_response, runtime_trace = (
+                        llm_service.run_agent_with_messages(
+                            app_settings=settings,
+                            client=client,
+                            messages=llm_messages,
+                            emit=_emit,
+                        )
                     )
                 else:
-                    decision, llm_request, llm_response, runtime_trace = run_agent(
-                        settings,
-                        client,
-                    )
+                    run_agent = llm_service.run_agent
+                    if self._run_agent_supports_emit(run_agent):
+                        decision, llm_request, llm_response, runtime_trace = run_agent(
+                            settings,
+                            client,
+                            emit=_emit,
+                        )
+                    else:
+                        decision, llm_request, llm_response, runtime_trace = run_agent(
+                            settings,
+                            client,
+                        )
             finally:
                 client.close()
 
@@ -1643,6 +1772,10 @@ class AniuService:
                 run = db.get(StrategyRun, run_id)
                 if run is None:
                     raise RuntimeError("运行记录不存在。")
+                run.chat_session_id = automation_session_id
+                run.prompt_message_id = prompt_message_id
+                run.context_summary_version = context_summary_version
+                run.context_tokens_estimate = context_tokens_estimate
                 run.skill_payloads = skill_payloads
                 run.llm_request_payload = llm_request
                 run.llm_response_payload = llm_response
@@ -1685,6 +1818,50 @@ class AniuService:
                             from_time=completed_at_shanghai,
                         )
                         db.add(schedule)
+
+                if automation_session_id is not None:
+                    session = db.get(ChatSession, automation_session_id)
+                    if session is not None:
+                        assistant_content = self._build_automation_assistant_content(
+                            run_id=run_id,
+                            run_type=str(getattr(settings, "run_type", "analysis") or "analysis"),
+                            status="completed",
+                            final_answer=str(decision.get("final_answer") or "").strip()
+                            or None,
+                            tool_calls=tool_calls if isinstance(tool_calls, list) else None,
+                            executed_actions=executed_actions,
+                        )
+                        response_message = self._persist_automation_assistant_message(
+                            db=db,
+                            session=session,
+                            run_id=run_id,
+                            content=assistant_content,
+                            tool_calls=tool_calls if isinstance(tool_calls, list) else None,
+                            status="completed",
+                            meta_payload={
+                                "run_type": str(
+                                    getattr(settings, "run_type", "analysis") or "analysis"
+                                ),
+                                "executed_action_count": len(executed_actions),
+                            },
+                        )
+                        response_message_id = response_message.id
+                        run.response_message_id = response_message_id
+                        archived_summary, summary_version = (
+                            self._maybe_compact_automation_session(
+                                db=db,
+                                session=session,
+                                settings=settings,
+                                estimated_tokens=int(context_tokens_estimate or 0),
+                            )
+                        )
+                        del archived_summary
+                        run.context_summary_version = (
+                            int(summary_version)
+                            if summary_version is not None
+                            else run.context_summary_version
+                        )
+                        db.add(run)
 
             for action in persisted_trade_orders:
                 _emit(
@@ -1733,6 +1910,11 @@ class AniuService:
             with session_scope() as db:
                 run = db.get(StrategyRun, run_id)
                 if run is not None:
+                    run.chat_session_id = automation_session_id
+                    run.prompt_message_id = prompt_message_id
+                    run.response_message_id = response_message_id
+                    run.context_summary_version = context_summary_version
+                    run.context_tokens_estimate = context_tokens_estimate
                     if prefetched_tool_calls:
                         existing_skill_payloads = (
                             run.skill_payloads
@@ -1751,6 +1933,36 @@ class AniuService:
                     run.final_answer = None
                     run.finished_at = now_utc()
                     db.add(run)
+                    if automation_session_id is not None:
+                        session = db.get(ChatSession, automation_session_id)
+                        if session is not None:
+                            assistant_content = self._build_automation_assistant_content(
+                                run_id=run_id,
+                                run_type=str(settings_snapshot.get("run_type") or "analysis"),
+                                status="failed",
+                                final_answer=None,
+                                tool_calls=prefetched_tool_calls,
+                                executed_actions=None,
+                                error_message=str(exc),
+                                phase=automation_phase,
+                            )
+                            response_message = self._persist_automation_assistant_message(
+                                db=db,
+                                session=session,
+                                run_id=run_id,
+                                content=assistant_content,
+                                tool_calls=prefetched_tool_calls,
+                                status="failed",
+                                meta_payload={
+                                    "phase": automation_phase,
+                                    "run_type": str(
+                                        settings_snapshot.get("run_type") or "analysis"
+                                    ),
+                                },
+                            )
+                            run.response_message_id = response_message.id
+                            response_message_id = response_message.id
+                            db.add(run)
                 if schedule_id:
                     schedule = db.get(StrategySchedule, schedule_id)
                     if schedule is not None:
@@ -2121,6 +2333,505 @@ class AniuService:
         if len(compact) <= 120:
             return compact
         return compact[:117] + "..."
+
+    def _is_automation_trigger(self, trigger_source: str) -> bool:
+        return str(trigger_source or "").strip() == "schedule"
+
+    def _get_or_create_automation_session(self, db: Session) -> ChatSession:
+        settings = self.get_or_create_settings(db)
+        session_id = int(getattr(settings, "automation_session_id", 0) or 0)
+        if session_id > 0:
+            existing = db.get(ChatSession, session_id)
+            if existing is not None and str(existing.kind or "") == "automation":
+                return existing
+
+        session = db.scalar(
+            select(ChatSession).where(
+                ChatSession.kind == "automation",
+                ChatSession.slug == AUTOMATION_SESSION_SLUG,
+            )
+        )
+        if session is None:
+            session = ChatSession(
+                title=AUTOMATION_SESSION_TITLE,
+                kind="automation",
+                slug=AUTOMATION_SESSION_SLUG,
+            )
+            db.add(session)
+            db.flush()
+
+        settings.automation_session_id = session.id
+        settings.automation_context_window_tokens = int(
+            getattr(settings, "automation_context_window_tokens", None)
+            or AUTOMATION_DEFAULT_CONTEXT_WINDOW_TOKENS
+        )
+        settings.automation_target_prompt_tokens = int(
+            getattr(settings, "automation_target_prompt_tokens", None)
+            or AUTOMATION_DEFAULT_TARGET_PROMPT_TOKENS
+        )
+        settings.automation_recent_message_limit = int(
+            getattr(settings, "automation_recent_message_limit", None)
+            or AUTOMATION_DEFAULT_RECENT_MESSAGE_LIMIT
+        )
+        settings.automation_idle_summary_hours = int(
+            getattr(settings, "automation_idle_summary_hours", None)
+            or AUTOMATION_DEFAULT_IDLE_SUMMARY_HOURS
+        )
+        settings.automation_context_source = (
+            str(getattr(settings, "automation_context_source", "") or "").strip()
+            or "default"
+        )
+        settings.automation_context_detected_at = now_utc()
+        if hasattr(settings, "_sa_instance_state"):
+            db.add(settings)
+        return session
+
+    def _build_automation_user_content(
+        self,
+        *,
+        settings: Any,
+        trigger_source: str,
+        schedule_id: int | None,
+        schedule_name: str | None,
+        run_type: str,
+        task_prompt: str,
+        prefetched_context: str | None,
+    ) -> str:
+        run_time = now_shanghai().isoformat(timespec="seconds")
+        lines = [
+            "[自动任务触发]",
+            f"时间: {run_time}",
+            f"来源: {trigger_source or 'schedule'}",
+            f"调度ID: {schedule_id if schedule_id is not None else '--'}",
+            f"任务名称: {str(schedule_name or '--').strip() or '--'}",
+            f"运行类型: {run_type}",
+            "",
+            "本轮任务:",
+            str(task_prompt or "").strip() or "--",
+            "",
+            "本轮账户快照:",
+            str(prefetched_context or "无预取快照。"),
+            "",
+            "执行要求:",
+            "请结合本会话历史继续判断，明确说明你是在延续、调整还是推翻之前计划。",
+            "如果要执行交易，请说明原因、仓位影响和与上一轮计划的关系。",
+        ]
+        del settings
+        return "\n".join(lines).strip()
+
+    def _summarize_tool_calls(
+        self, tool_calls: list[dict[str, Any]] | None, *, limit: int = 8
+    ) -> list[str]:
+        if not isinstance(tool_calls, list):
+            return []
+        lines: list[str] = []
+        for item in tool_calls[:limit]:
+            if not isinstance(item, dict):
+                continue
+            tool_name = str(item.get("name") or item.get("tool_name") or "").strip()
+            if not tool_name:
+                continue
+            result = item.get("result")
+            summary = ""
+            if isinstance(result, dict):
+                summary = str(result.get("summary") or result.get("error") or "").strip()
+            if not summary:
+                summary = str(item.get("summary") or "已执行").strip() or "已执行"
+            lines.append(f"- {tool_name}: {summary}")
+        return lines
+
+    def _build_automation_assistant_content(
+        self,
+        *,
+        run_id: int,
+        run_type: str,
+        status: str,
+        final_answer: str | None,
+        tool_calls: list[dict[str, Any]] | None,
+        executed_actions: list[dict[str, Any]] | None,
+        error_message: str | None = None,
+        phase: str | None = None,
+    ) -> str:
+        content = str(final_answer or "").strip()
+        actions = executed_actions if isinstance(executed_actions, list) else []
+        tool_lines = self._summarize_tool_calls(tool_calls)
+
+        if status == "completed":
+            action_lines = []
+            for item in actions:
+                if not isinstance(item, dict):
+                    continue
+                action = str(item.get("action") or "").upper()
+                symbol = str(item.get("symbol") or "").strip()
+                quantity = int(item.get("quantity") or 0)
+                price_type = str(item.get("price_type") or "MARKET")
+                price = item.get("price")
+                action_text = f"- {action} {symbol} {quantity}股 {price_type}"
+                if price not in (None, ""):
+                    action_text += f" {price}"
+                action_lines.append(action_text)
+
+            summary_lines = [
+                "[本轮执行摘要]",
+                f"- run_id: {run_id}",
+                f"- 状态: {status}",
+                f"- 运行类型: {run_type}",
+                "- 执行动作:",
+            ]
+            summary_lines.extend(action_lines or ["- 无交易执行。"])
+            summary_lines.append("- 工具摘要:")
+            summary_lines.extend(tool_lines or ["- 无工具调用。"])
+            summary_lines.append("- 遗留事项:")
+            summary_lines.append("- 参考本轮结论，并在下一轮结合最新账户快照继续判断。")
+            if content:
+                return f"{content}\n\n" + "\n".join(summary_lines)
+            return "\n".join(summary_lines)
+
+        failure_lines = [
+            f"执行失败：{str(error_message or '未知错误').strip() or '未知错误'}",
+            "",
+            "[本轮失败摘要]",
+            f"- run_id: {run_id}",
+            f"- 阶段: {str(phase or 'run').strip() or 'run'}",
+            "- 已完成部分:",
+        ]
+        failure_lines.extend(tool_lines or ["- 无已记录工具调用。"])
+        failure_lines.append("- 遗留风险:")
+        failure_lines.append("- 下次运行需结合失败原因和最新账户快照重新判断。")
+        return "\n".join(failure_lines)
+
+    def _persist_automation_user_message(
+        self,
+        *,
+        db: Session,
+        session: ChatSession,
+        run_id: int,
+        content: str,
+        schedule_id: int | None,
+        schedule_name: str | None,
+        run_type: str,
+        trigger_source: str,
+    ) -> ChatMessageRecord:
+        record = ChatMessageRecord(
+            session_id=session.id,
+            role="user",
+            content=content,
+            source="automation_run",
+            run_id=run_id,
+            message_kind="live_turn",
+            meta_payload={
+                "trigger_source": trigger_source,
+                "schedule_id": schedule_id,
+                "schedule_name": schedule_name,
+                "run_type": run_type,
+            },
+        )
+        db.add(record)
+        db.flush()
+        session.last_message_at = now_utc()
+        db.add(session)
+        return record
+
+    def _slim_automation_tool_calls(
+        self, tool_calls: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
+        if not isinstance(tool_calls, list):
+            return None
+        slimmed: list[dict[str, Any]] = []
+        for item in tool_calls:
+            if not isinstance(item, dict):
+                continue
+            result = item.get("result") if isinstance(item.get("result"), dict) else {}
+            entry = {
+                "name": item.get("name"),
+                "tool_call_id": item.get("id") or item.get("tool_call_id"),
+                "arguments": item.get("arguments"),
+                "ok": result.get("ok"),
+                "summary": result.get("summary") or result.get("error"),
+            }
+            executed_action = result.get("executed_action")
+            if isinstance(executed_action, dict):
+                entry["executed_action"] = executed_action
+            slimmed.append(entry)
+        return slimmed or None
+
+    def _persist_automation_assistant_message(
+        self,
+        *,
+        db: Session,
+        session: ChatSession,
+        run_id: int,
+        content: str,
+        tool_calls: list[dict[str, Any]] | None,
+        status: str,
+        meta_payload: dict[str, Any] | None,
+    ) -> ChatMessageRecord:
+        record = ChatMessageRecord(
+            session_id=session.id,
+            role="assistant",
+            content=content,
+            source="automation_run",
+            run_id=run_id,
+            message_kind="live_turn",
+            tool_calls=self._slim_automation_tool_calls(tool_calls),
+            meta_payload={"status": status, **(meta_payload or {})} or None,
+        )
+        db.add(record)
+        db.flush()
+        session.last_message_at = now_utc()
+        db.add(session)
+        return record
+
+    def _list_automation_history_records(
+        self,
+        *,
+        db: Session,
+        session_id: int,
+        recent_limit: int,
+    ) -> list[ChatMessageRecord]:
+        limit = max(4, int(recent_limit or AUTOMATION_DEFAULT_RECENT_MESSAGE_LIMIT))
+        session = db.get(ChatSession, session_id)
+        last_compacted_message_id = int(
+            getattr(session, "last_compacted_message_id", 0) or 0
+        )
+        stmt = (
+            select(ChatMessageRecord)
+            .where(ChatMessageRecord.session_id == session_id)
+            .order_by(ChatMessageRecord.id.desc())
+            .limit(limit)
+        )
+        if last_compacted_message_id > 0:
+            stmt = stmt.where(ChatMessageRecord.id > last_compacted_message_id)
+        records = (
+            db.execute(
+                stmt
+            )
+            .scalars()
+            .all()
+        )
+        records.reverse()
+        return records
+
+    def _build_automation_history_messages(
+        self, records: list[ChatMessageRecord]
+    ) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
+        for record in records:
+            if record.role not in {"user", "assistant", "system"}:
+                continue
+            content_parts = [str(record.content or "").strip()]
+            tool_lines = self._summarize_tool_calls(record.tool_calls)
+            if tool_lines:
+                content_parts.append("[历史工具摘要]\n" + "\n".join(tool_lines))
+            content = "\n\n".join(part for part in content_parts if part).strip()
+            if not content:
+                continue
+            messages.append({"role": record.role, "content": content})
+        return messages
+
+    def _estimate_automation_context_tokens(
+        self,
+        *,
+        session: ChatSession,
+        settings: Any,
+        messages: list[dict[str, Any]],
+        resume_block: str | None,
+    ) -> int:
+        estimate = estimate_messages_tokens(messages)
+        estimate += estimate_text_tokens(getattr(settings, "system_prompt", None))
+        estimate += estimate_text_tokens(session.archived_summary)
+        estimate += estimate_text_tokens(resume_block)
+        return estimate
+
+    def _build_resume_summary_block(
+        self,
+        *,
+        idle_since: datetime | None,
+        archived_summary: str | None,
+        settings: Any,
+    ) -> str | None:
+        archived_summary = str(archived_summary or "").strip()
+        if not archived_summary:
+            return None
+        last_message_at = _assume_utc(idle_since)
+        if last_message_at is None:
+            return None
+        idle_hours = int(
+            getattr(settings, "automation_idle_summary_hours", 0)
+            or AUTOMATION_DEFAULT_IDLE_SUMMARY_HOURS
+        )
+        if idle_hours <= 0:
+            return None
+        elapsed = now_utc() - last_message_at
+        if elapsed < timedelta(hours=idle_hours):
+            return None
+        return (
+            f"[恢复摘要]\n该自动化会话已空闲 {int(elapsed.total_seconds() // 3600)} 小时。\n"
+            f"以下是上次压缩后的状态摘要：\n{archived_summary}"
+        )
+
+    def _build_automation_context_system_message(
+        self,
+        *,
+        session: ChatSession,
+        resume_block: str | None,
+    ) -> dict[str, Any] | None:
+        parts: list[str] = []
+        archived_summary = str(session.archived_summary or "").strip()
+        if archived_summary:
+            parts.append("[滚动摘要]\n" + archived_summary)
+        if resume_block:
+            parts.append(resume_block)
+        if not parts:
+            return None
+        return {"role": "system", "content": "\n\n".join(parts)}
+
+    def _build_automation_prompt_messages(
+        self,
+        *,
+        session: ChatSession,
+        history_messages: list[dict[str, Any]],
+        resume_block: str | None,
+    ) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
+        context_message = self._build_automation_context_system_message(
+            session=session,
+            resume_block=resume_block,
+        )
+        if context_message is not None:
+            messages.append(context_message)
+        messages.extend(history_messages)
+        return messages
+
+    def _build_compacted_summary_text(
+        self, records: list[ChatMessageRecord]
+    ) -> str | None:
+        if not records:
+            return None
+        assistant_records = [record for record in records if record.role == "assistant"]
+        if not assistant_records:
+            return None
+        recent = assistant_records[-6:]
+        lines = [
+            "## 当前策略",
+            "- 结合最近自动化运行的结论、失败记录和账户快照继续决策。",
+            "## 已执行动作",
+        ]
+        for record in recent:
+            summary = self._build_analysis_summary(record.content)
+            run_id = record.run_id if record.run_id is not None else "--"
+            if summary:
+                lines.append(f"- run_id {run_id}: {summary}")
+        lines.extend(
+            [
+                "## 当前约束",
+                "- 原始运行记录和交易记录以 StrategyRun / TradeOrder 为准。",
+                "- 账户实时数字应以本轮最新快照和工具结果为准。",
+                "## 后续计划",
+                "- 下一轮结合最新账户快照，延续、调整或推翻之前计划。",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _safe_prompt_budget(self, settings: Any) -> int:
+        context_window = int(
+            getattr(settings, "automation_context_window_tokens", 0)
+            or AUTOMATION_DEFAULT_CONTEXT_WINDOW_TOKENS
+        )
+        safe_budget = max(
+            2048,
+            context_window
+            - AUTOMATION_RESERVED_OUTPUT_TOKENS
+            - AUTOMATION_SAFETY_BUFFER_TOKENS,
+        )
+        configured_target = int(
+            getattr(settings, "automation_target_prompt_tokens", 0)
+            or AUTOMATION_DEFAULT_TARGET_PROMPT_TOKENS
+        )
+        return min(configured_target, int(safe_budget * 0.7))
+
+    def _should_compact_automation_session(
+        self,
+        *,
+        session: ChatSession,
+        records: list[ChatMessageRecord],
+        settings: Any,
+        estimated_tokens: int,
+    ) -> bool:
+        if not bool(getattr(settings, "automation_enable_auto_compaction", True)):
+            return False
+        recent_limit = int(
+            getattr(settings, "automation_recent_message_limit", 0)
+            or AUTOMATION_DEFAULT_RECENT_MESSAGE_LIMIT
+        )
+        if len(records) > recent_limit:
+            return True
+        if estimated_tokens > self._safe_prompt_budget(settings):
+            return True
+        last_message_at = _assume_utc(session.last_message_at)
+        idle_hours = int(
+            getattr(settings, "automation_idle_summary_hours", 0)
+            or AUTOMATION_DEFAULT_IDLE_SUMMARY_HOURS
+        )
+        if last_message_at is not None and idle_hours > 0:
+            if now_utc() - last_message_at >= timedelta(hours=idle_hours):
+                return True
+        return False
+
+    def _maybe_compact_automation_session(
+        self,
+        *,
+        db: Session,
+        session: ChatSession,
+        settings: Any,
+        estimated_tokens: int,
+    ) -> tuple[str | None, int | None]:
+        records = (
+            db.execute(
+                select(ChatMessageRecord)
+                .where(ChatMessageRecord.session_id == session.id)
+                .order_by(ChatMessageRecord.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+        if not self._should_compact_automation_session(
+            session=session,
+            records=records,
+            settings=settings,
+            estimated_tokens=estimated_tokens,
+        ):
+            return session.archived_summary, session.summary_revision
+
+        recent_limit = max(
+            8,
+            int(
+                getattr(settings, "automation_recent_message_limit", 0)
+                or AUTOMATION_DEFAULT_RECENT_MESSAGE_LIMIT
+            )
+            // 2,
+        )
+        compact_cutoff = max(0, len(records) - recent_limit)
+        compact_candidates = records[:compact_cutoff]
+        if len(compact_candidates) < 2:
+            return session.archived_summary, session.summary_revision
+        if len(compact_candidates) % 2 == 1:
+            compact_candidates = compact_candidates[:-1]
+        if len(compact_candidates) < 2:
+            return session.archived_summary, session.summary_revision
+
+        summary = self._build_compacted_summary_text(compact_candidates)
+        if not summary:
+            return session.archived_summary, session.summary_revision
+
+        session.archived_summary = summary
+        session.summary_updated_at = now_utc()
+        session.last_compacted_message_id = compact_candidates[-1].id
+        last_run_id = compact_candidates[-1].run_id
+        session.last_compacted_run_id = int(last_run_id) if last_run_id else None
+        session.summary_revision = int(session.summary_revision or 0) + 1
+        db.add(session)
+        return session.archived_summary, session.summary_revision
 
     def _compute_next_run_at(
         self,

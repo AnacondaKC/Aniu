@@ -132,6 +132,8 @@ def _session_to_read(session: ChatSession, message_count: int = 0) -> ChatSessio
     return ChatSessionRead(
         id=session.id,
         title=session.title,
+        kind=str(session.kind or "user"),
+        slug=session.slug,
         created_at=_assume_utc(session.created_at),
         updated_at=_assume_utc(session.updated_at),
         last_message_at=_assume_utc(session.last_message_at),
@@ -206,6 +208,7 @@ class ChatSessionService:
 
         rows = db.execute(
             select(ChatSession, func.coalesce(count_sub.c.count, 0))
+            .where(ChatSession.kind == "user")
             .outerjoin(count_sub, count_sub.c.session_id == ChatSession.id)
             .order_by(
                 ChatSession.last_message_at.desc().nullslast(),
@@ -219,7 +222,8 @@ class ChatSessionService:
         self, db: Session, *, title: str | None = None
     ) -> ChatSessionRead:
         session = ChatSession(
-            title=(title or DEFAULT_SESSION_TITLE).strip() or DEFAULT_SESSION_TITLE
+            title=(title or DEFAULT_SESSION_TITLE).strip() or DEFAULT_SESSION_TITLE,
+            kind="user",
         )
         db.add(session)
         db.flush()
@@ -229,7 +233,7 @@ class ChatSessionService:
         self, db: Session, session_id: int, *, title: str
     ) -> ChatSessionRead:
         session = db.get(ChatSession, session_id)
-        if session is None:
+        if session is None or str(session.kind or "user") != "user":
             raise LookupError("会话不存在。")
         session.title = title.strip() or session.title
         db.flush()
@@ -242,7 +246,7 @@ class ChatSessionService:
 
     def delete_session(self, db: Session, session_id: int) -> None:
         session = db.get(ChatSession, session_id)
-        if session is None:
+        if session is None or str(session.kind or "user") != "user":
             raise LookupError("会话不存在。")
         db.delete(session)
 
@@ -255,7 +259,7 @@ class ChatSessionService:
         before_id: int | None = None,
     ) -> tuple[ChatSessionRead, list[ChatMessageRead], int | None, bool]:
         session = db.get(ChatSession, session_id)
-        if session is None:
+        if session is None or str(session.kind or "user") != "user":
             raise LookupError("会话不存在。")
 
         page_size = max(1, int(limit))
@@ -419,7 +423,7 @@ class ChatSessionService:
                 raise RuntimeError("未配置大模型接口，无法执行 AI 聊天。")
 
             session = db.get(ChatSession, payload.session_id)
-            if session is None:
+            if session is None or str(session.kind or "user") != "user":
                 raise LookupError("会话不存在。")
 
             attachments = self._resolve_attachments(db, payload.attachment_ids)

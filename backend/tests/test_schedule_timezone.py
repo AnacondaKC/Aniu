@@ -266,7 +266,7 @@ def test_execute_run_failure_advances_schedule_window(monkeypatch, tmp_path) -> 
     )
     monkeypatch.setattr(
         aniu_service_module.llm_service,
-        "run_agent",
+        "run_agent_with_messages",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     monkeypatch.setattr(
@@ -348,7 +348,7 @@ def test_execute_run_failure_stops_retry_after_third_retry(monkeypatch, tmp_path
     )
     monkeypatch.setattr(
         aniu_service_module.llm_service,
-        "run_agent",
+        "run_agent_with_messages",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     monkeypatch.setattr(
