@@ -223,6 +223,7 @@ curl -X POST http://127.0.0.1:8000/api/aniu/login \
 
 ### 致谢
 
+本项目使用了东方财富的妙想接口，感谢 [东方财富]((https://www.eastmoney.com/))。
 本项目开发使用了公益站，感谢 [LINUX DO](https://linux.do/t/topic/1987329) 社区的支持。
 
 ---
