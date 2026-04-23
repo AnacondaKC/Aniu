@@ -16,6 +16,7 @@ from app.services.aniu_service import aniu_service
 from app.services.event_bus import event_bus
 from app.services.llm_service import llm_service
 from app.services.scheduler_service import scheduler_service
+from app.services.token_estimator import estimate_messages_tokens, estimate_text_tokens
 from app.services.trading_calendar_service import trading_calendar_service
 
 
@@ -338,6 +339,94 @@ def test_context_compaction_messages_are_not_reinjected_into_model_history(
         {"role": "user", "content": "用户历史"},
         {"role": "assistant", "content": "助手历史"},
     ]
+
+    reset_db_state()
+
+
+def test_token_estimate_does_not_double_count_archived_summary(monkeypatch, tmp_path) -> None:
+    with create_test_client(monkeypatch, tmp_path):
+        session = ChatSession(
+            title="自动化交易会话",
+            kind="automation",
+            slug="automation-default",
+            archived_summary="## 当前策略\n- 继续观察",
+        )
+        settings = SimpleNamespace(system_prompt="system")
+        messages = aniu_service._build_persistent_session_prompt_messages(
+            session=session,
+            history_messages=[{"role": "user", "content": "最新用户消息"}],
+            memory_messages=[],
+        )
+
+        estimate = aniu_service._estimate_persistent_session_context_tokens(
+            session=session,
+            settings=settings,
+            messages=messages,
+        )
+
+    assert estimate == (
+        estimate_messages_tokens(messages)
+        + estimate_text_tokens(settings.system_prompt)
+    )
+
+    reset_db_state()
+
+
+def test_compaction_uses_only_uncompacted_history(monkeypatch, tmp_path) -> None:
+    with create_test_client(monkeypatch, tmp_path):
+        with session_scope() as db:
+            session = ChatSession(
+                title="自动化交易会话",
+                kind="automation",
+                slug="automation-default",
+                archived_summary="已压缩历史",
+                last_compacted_message_id=6,
+                summary_revision=2,
+            )
+            db.add(session)
+            db.flush()
+            db.add_all(
+                [
+                    ChatMessageRecord(
+                        session_id=session.id,
+                        role="user",
+                        content=f"旧消息-{index}",
+                        message_kind="live_turn",
+                    )
+                    for index in range(1, 7)
+                ]
+                + [
+                    ChatMessageRecord(
+                        session_id=session.id,
+                        role="user",
+                        content="最新用户消息",
+                        message_kind="live_turn",
+                    ),
+                    ChatMessageRecord(
+                        session_id=session.id,
+                        role="assistant",
+                        content="最新助手消息",
+                        message_kind="live_turn",
+                    ),
+                ]
+            )
+            db.flush()
+            settings = SimpleNamespace(
+                automation_enable_auto_compaction=True,
+                automation_recent_message_limit=4,
+                automation_idle_summary_hours=12,
+                automation_context_window_tokens=128000,
+            )
+
+            archived_summary, summary_revision = aniu_service._maybe_compact_persistent_session(
+                db=db,
+                session=session,
+                settings=settings,
+                estimated_tokens=0,
+            )
+
+    assert archived_summary == "已压缩历史"
+    assert summary_revision == 2
 
     reset_db_state()
 

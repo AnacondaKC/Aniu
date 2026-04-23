@@ -2706,8 +2706,25 @@ class AniuService:
     ) -> int:
         estimate = estimate_messages_tokens(messages)
         estimate += estimate_text_tokens(getattr(settings, "system_prompt", None))
-        estimate += estimate_text_tokens(session.archived_summary)
         return estimate
+
+    def _list_uncompacted_persistent_session_records(
+        self,
+        *,
+        db: Session,
+        session: ChatSession,
+    ) -> list[ChatMessageRecord]:
+        stmt = (
+            select(ChatMessageRecord)
+            .where(ChatMessageRecord.session_id == session.id)
+            .order_by(ChatMessageRecord.id.asc())
+        )
+        last_compacted_message_id = int(
+            getattr(session, "last_compacted_message_id", 0) or 0
+        )
+        if last_compacted_message_id > 0:
+            stmt = stmt.where(ChatMessageRecord.id > last_compacted_message_id)
+        return db.execute(stmt).scalars().all()
 
     def _build_persistent_session_context_system_message(
         self,
@@ -2809,14 +2826,9 @@ class AniuService:
         settings: Any,
         estimated_tokens: int,
     ) -> tuple[str | None, int | None]:
-        records = (
-            db.execute(
-                select(ChatMessageRecord)
-                .where(ChatMessageRecord.session_id == session.id)
-                .order_by(ChatMessageRecord.id.asc())
-            )
-            .scalars()
-            .all()
+        records = self._list_uncompacted_persistent_session_records(
+            db=db,
+            session=session,
         )
         if not self._should_compact_automation_session(
             session=session,
