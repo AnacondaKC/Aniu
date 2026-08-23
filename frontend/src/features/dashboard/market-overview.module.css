@@ -73,19 +73,6 @@
   line-height: 16px;
 }
 
-.marketUpdateTime {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--market-label-tertiary);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  line-height: 16px;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .quoteGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

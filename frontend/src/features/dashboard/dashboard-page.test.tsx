@@ -200,8 +200,21 @@ describe("DashboardPage", () => {
     expect(screen.getByText("¥150.50")).toBeInTheDocument();
     expect(screen.getByText("买入")).toBeInTheDocument();
 
+    const refreshTimePattern = /^最近刷新：\d{2}-\d{2} \d{2}:\d{2}$/;
+    const refreshTimeClasses = [
+      "text-muted-foreground",
+      "min-w-0",
+      "flex-1",
+      "truncate",
+      "text-right",
+      "text-xs",
+      "tabular-nums",
+    ];
+    expect(screen.getByText(refreshTimePattern)).toHaveClass(...refreshTimeClasses);
+
     await user.click(screen.getByRole("tab", { name: "行情总览" }));
     expect((await screen.findAllByText("上证指数")).length).toBeGreaterThan(0);
+    expect(screen.getByText(refreshTimePattern)).toHaveClass(...refreshTimeClasses);
     expect(screen.getByText("个股涨幅")).toBeInTheDocument();
     expect(screen.getByText("两市成交总额")).toBeInTheDocument();
     expect(screen.getByLabelText("沪深A股涨跌：上涨 1576，下跌 3549")).toBeInTheDocument();

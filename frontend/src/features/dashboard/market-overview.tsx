@@ -4,6 +4,7 @@ import type { MarketOverview as MarketOverviewData } from "@/lib/api-types";
 import { getErrorMessage } from "@/lib/format";
 
 import styles from "./market-overview.module.css";
+import { RefreshTime } from "./refresh-time";
 
 const MARKET_INDICES = [
   { id: "sse", name: "上证指数" },
@@ -287,29 +288,11 @@ function InvestorQuoteFooter() {
 
 export function MarketUpdateTime({ data }: { data: MarketOverviewData | undefined }) {
   const snapshot = data as MarketSnapshot | undefined;
-  if (snapshot === undefined) return null;
   return (
-    <span className={styles.marketUpdateTime}>
-      {formatUpdateTime(latestMarketTime(snapshot.indices, snapshot.generated_at))}
-    </span>
+    <RefreshTime
+      value={snapshot ? latestMarketTime(snapshot.indices, snapshot.generated_at) : undefined}
+    />
   );
-}
-
-function formatUpdateTime(value: string): string {
-  const date = new Date(value);
-  if (!Number.isNaN(date.getTime())) {
-    const parts = new Intl.DateTimeFormat("zh-CN", {
-      month: "numeric",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).formatToParts(date);
-    const get = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((part) => part.type === type)?.value ?? "--";
-    return `最近刷新：${get("month")}月${get("day")}日 ${get("hour")}时${get("minute")}分${get("second")}秒`;
-  }
-  return `数据更新时间：${value}`;
 }
 
 function LiveMarketPulse({

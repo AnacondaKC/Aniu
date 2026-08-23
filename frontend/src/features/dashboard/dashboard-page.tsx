@@ -46,6 +46,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { MarketOverview, MarketUpdateTime } from "./market-overview";
+import { RefreshTime } from "./refresh-time";
 
 function formatNetValue(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return "--";
@@ -304,7 +305,7 @@ export function DashboardPage() {
 
   return (
     <div className={isAccountTab ? "flex min-h-0 flex-1 flex-col gap-4" : "space-y-4"}>
-      <div className="mb-2 flex items-center justify-between space-y-2">
+      <div className="flex items-center justify-between space-y-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">投资总览</h1>
           <p className="text-muted-foreground text-sm">聚焦账户状态、最近运行与组合变化</p>
@@ -342,7 +343,7 @@ export function DashboardPage() {
           {activeTab === "market" ? (
             <MarketUpdateTime data={marketData} />
           ) : (
-            <AccountUpdateTime data={dashboardQuery.data} />
+            <RefreshTime value={dashboardQuery.data?.overview.captured_at} />
           )}
         </div>
 
@@ -377,14 +378,6 @@ export function DashboardPage() {
         </TabsContent>
       </Tabs>
     </div>
-  );
-}
-
-function AccountUpdateTime({ data }: { data: DashboardData | undefined }) {
-  return (
-    <span className="text-muted-foreground text-xs tabular-nums">
-      最近刷新：{formatMonthDayTime(data?.overview.captured_at)}
-    </span>
   );
 }
 
