@@ -223,7 +223,7 @@ curl http://127.0.0.1:8000/health/ready
 使用指定 Release 镜像部署：
 
 ```bash
-export ANIU_IMAGE=ghcr.io/anacondakc/aniu:v1.0.0
+export ANIU_IMAGE=ghcr.io/anacondakc/aniu:v1.0.1
 docker pull "$ANIU_IMAGE"
 docker compose --env-file .aniu/local/.env up -d --no-build --force-recreate
 ```
