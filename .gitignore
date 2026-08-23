@@ -59,7 +59,9 @@ htmlcov/
 .opencode/
 
 # Local documentation and reference material
-/docs/
+/docs/*
+!/docs/screenshots/
+!/docs/screenshots/*.png
 
 # Node dependencies and build output (kept outside Git)
 node_modules
