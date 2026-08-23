@@ -15,7 +15,7 @@ backend/
 └── stock_api/    # 股票数据接口适配
 frontend/         # React、TypeScript、Vite 前端
 scripts/          # 仓库开发脚本
-install.sh         # 公共源码/Docker 安装入口
+install.sh         # 一键源码安装并启动入口
 .aniu/            # 本机运行数据、依赖、缓存和参考资料，不提交到 Git
 ├── docs/          # 本地参考源码、接口资料和品牌图片
 │   └── references/ # 外部参考项目和测试资料
@@ -24,33 +24,13 @@ install.sh         # 公共源码/Docker 安装入口
 
 ## 一键安装
 
-在 GitHub 源码目录中执行，默认使用 Docker 构建并启动：
+在 GitHub 源码目录中执行：
 
 ```bash
 ./install.sh
 ```
 
-使用 GitHub Actions 生成的预构建镜像时：
-
-```bash
-./install.sh docker --image ghcr.io/OWNER/IMAGE:latest
-```
-
-不使用 Docker、直接安装源码和前端依赖时：
-
-```bash
-./install.sh source
-./install.sh source --start
-./install.sh source --systemd
-```
-
-清理可重建的缓存、日志、前端依赖和参考项目构建产物：
-
-```bash
-./install.sh clean
-```
-
-Docker 模式会将本地环境文件创建为 `.aniu/local/.env`，默认只发布到本机回环地址，不会提交密钥。源码模式使用 `requirements.lock` 安装 Python 依赖，并执行前端生产构建；需要长期后台运行时使用 `./install.sh source --systemd`。`clean` 不会删除数据库、密钥、`.env`、虚拟环境、参考源码或私有资料，但会删除 `frontend/node_modules`；再次进行前端开发时执行 `npm --prefix frontend ci --include=dev`。Docker 模式不需要 systemd。
+脚本会检查 Python 3.12+ 和 npm，创建本地虚拟环境，按 `requirements.lock` 安装后端依赖，安装并构建前端，然后以前台方式启动应用。默认地址为 <http://127.0.0.1:8000>；按 `Ctrl+C` 停止服务。
 
 ## 本地开发
 
@@ -112,7 +92,7 @@ ANIU_DATA_DIR=$HOME/.local/share/aniu .aniu/local/.venv/bin/python .aniu/dev.py
 mv data .aniu
 ```
 
-Docker 继续使用命名 volume 中的 `/app/data`；源码 systemd 模式使用 `/var/lib/aniu`，两者都不会把运行数据写入源码目录。
+Docker 继续使用命名 volume 中的 `/app/data`；源码一键运行默认使用仓库根目录的 `.aniu/`。
 
 ## Docker 部署
 
@@ -173,13 +153,13 @@ npm --prefix frontend run api:check
 
 ## 重建本地数据库
 
-项目使用可重建的 SQLite 开发数据库，不维护旧 Schema 迁移。重建前先停止服务：
+项目使用可重建的 SQLite 开发数据库，不维护旧 Schema 迁移。重建前先按 `Ctrl+C` 停止一键启动的服务：
 
 ```bash
-sudo systemctl stop aniu.service
 rm -f .aniu/aniu.sqlite3 .aniu/aniu.sqlite3-wal .aniu/aniu.sqlite3-shm
-sudo systemctl start aniu.service
 ```
+
+然后重新执行 `./install.sh`。
 
 重建后确认已删除的 Skill 表没有被遗留：
 
@@ -191,22 +171,3 @@ sqlite3 .aniu/aniu.sqlite3 \
 上述命令应无输出。
 
 不要删除 `.aniu/.aniu-secret-key`，否则现有加密 secret 将无法解密。需要彻底清空 secret 时，应同时删除数据库和密钥，再重新启动服务。
-
-## systemd
-
-源码安装并作为 Linux 后台服务长期运行时，直接让安装脚本生成并启用服务单元：
-
-```bash
-./install.sh source --systemd
-```
-
-脚本会生成 `/etc/systemd/system/aniu.service`，默认仅监听 `127.0.0.1`，使用 `.aniu/local/.venv` 启动后端，将数据写入 `/var/lib/aniu`，并执行 `daemon-reload` 和 `enable --now`。unit 通过权限为 `0600` 的 `.aniu/local/.env` 读取 `ANIU_AUTH_TOKEN` 和加密密钥，不会将密钥写入 unit 或命令行。
-
-需要 LAN 时显式启用并配置 Host：
-
-```bash
-ANIU_SYSTEMD_LAN=1 ANIU_SYSTEMD_ALLOWED_HOSTS=192.168.1.20,aniu.example.internal \
-  ./install.sh source --systemd
-```
-
-LAN 部署应通过 HTTPS 反向代理或 SSH 隧道访问。可通过 `ANIU_SYSTEMD_ALLOWED_HOSTS`、`ANIU_SYSTEMD_LAN`、`ANIU_SYSTEMD_USER`、`ANIU_SYSTEMD_PORT` 和 `ANIU_SYSTEMD_CORS_ORIGINS` 调整服务配置。请以实际部署用户运行脚本，脚本会在需要时调用 `sudo`。脚本需要 `systemd` 和 `sudo`；Docker 安装不使用这条路径。
