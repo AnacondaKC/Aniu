@@ -117,7 +117,33 @@ Aniu（Aniubot）是一个本地优先的股票交易智能体系统。它以 A 
 
 - Python 3.12+
 - Node.js 22+ 与 npm
+- Git 与 curl（Linux 一键安装需要）
 - Docker（仅 Docker 部署需要）
+
+Linux 发行版还需要提供 Python 的 venv 模块；Debian/Ubuntu 通常对应 <code>python3-venv</code> 软件包。
+
+### Linux 一键安装
+
+在已安装 Git、Python 3.12+、Node.js 22+、npm 和 curl 的 Linux 主机上，可以直接拉取源码、安装依赖并启动服务：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnacondaKC/Aniu/main/install-linux.sh | bash
+```
+
+默认安装到 <code>$HOME/Aniu</code>。自定义安装目录或分支：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnacondaKC/Aniu/main/install-linux.sh | bash -s -- --dir "$HOME/aniu" --branch main
+```
+
+如果目标目录已经是同一仓库且工作区干净，脚本会以 fast-forward 方式更新；检测到未提交改动时会停止，不覆盖本地文件。脚本完成依赖安装后会以前台方式启动 Aniu，按 <code>Ctrl+C</code> 停止服务。
+
+> 远程脚本会直接在当前主机执行。生产环境建议先下载并审阅脚本，再运行：
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/AnacondaKC/Aniu/main/install-linux.sh -o /tmp/aniu-install-linux.sh
+> bash /tmp/aniu-install-linux.sh --help
+> ```
 
 ### 一键源码运行
 
@@ -277,6 +303,7 @@ Aniu/
 │   ├── src/features/   # 认证、总览、运行、记忆与设置功能
 │   └── src/generated/  # OpenAPI 生成的类型
 ├── scripts/          # 开发与契约脚本
+├── install-linux.sh  # Linux 一键拉取、安装与启动
 ├── docs/screenshots/ # README 页面截图
 ├── Dockerfile
 ├── compose.yaml
