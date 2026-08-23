@@ -96,6 +96,9 @@ clean_local_artifacts() {
     "$ROOT_DIR/.aniu/local/.ruff_cache" \
     "$ROOT_DIR/.aniu/local/pycache" \
     "$ROOT_DIR/.aniu/local/frontend-vite" \
+    "$ROOT_DIR/.aniu/local/tsbuildinfo" \
+    "$ROOT_DIR/.aniu/local/npm-cache" \
+    "$ROOT_DIR/.aniu/local/pip-cache" \
     "$ROOT_DIR/.aniu/local/aniubot.egg-info" \
     "$ROOT_DIR/.aniu/local/build" \
     "$ROOT_DIR/.aniu/local/tools/tdx_probe" \
@@ -135,8 +138,9 @@ install_docker() {
 }
 
 install_frontend() {
-  npm --prefix "$ROOT_DIR/frontend" ci --include=dev
-  npm --prefix "$ROOT_DIR/frontend" run build
+  mkdir -p "$LOCAL_DIR/npm-cache" "$LOCAL_DIR/tsbuildinfo"
+  npm_config_cache="$LOCAL_DIR/npm-cache" npm --prefix "$ROOT_DIR/frontend" ci --include=dev
+  npm_config_cache="$LOCAL_DIR/npm-cache" npm --prefix "$ROOT_DIR/frontend" run build
 }
 
 install_systemd() {
@@ -189,6 +193,7 @@ User=$service_user
 WorkingDirectory=$escaped_root
 Environment=PATH=$escaped_venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPYCACHEPREFIX=/var/lib/aniu/pycache
 Environment=ANIU_DATA_DIR=/var/lib/aniu
 Environment=ANIU_FRONTEND_DIST=$escaped_frontend
 Environment=ANIU_SERVE_FRONTEND=1
@@ -233,6 +238,9 @@ install_source() {
     python3 -m venv "$VENV_DIR"
   fi
 
+  mkdir -p "$LOCAL_DIR/pip-cache" "$LOCAL_DIR/pycache"
+  export PIP_CACHE_DIR="$LOCAL_DIR/pip-cache"
+  export PYTHONPYCACHEPREFIX="$LOCAL_DIR/pycache"
   "$VENV_DIR/bin/python" -m pip install \
     --require-hashes -r "$ROOT_DIR/requirements.lock"
   (

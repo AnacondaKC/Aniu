@@ -85,7 +85,7 @@ python -m venv .aniu/local/.venv
 
 默认情况下，应用数据库、加密密钥和轮转日志都写入仓库根目录的 `.aniu/`。开发依赖、构建产物和缓存集中放在 `.aniu/local/`；参考源码、接口资料、参考项目和品牌图片统一放在 `.aniu/docs/`（外部参考项目位于 `.aniu/docs/references/`）。这些内容都不会上传到 GitHub。
 
-Python 开发环境固定放在 `.aniu/local/.venv`，MyPy、Pytest 和 Ruff 的缓存也固定放在 `.aniu/local/`，不会再在根目录生成这些目录；本地参考源码、参考项目和图片位于 `.aniu/docs/`。`.aniu/dev.py` 是仅供本机开发使用的启动器，不进入 GitHub；新克隆的公共代码可直接使用 `backend.serve` 和前端 npm 命令，生产环境使用 `backend.serve` 或 Docker。前端依赖和构建输出位于被 Git 忽略的 `frontend/` 子目录，根目录不需要 `node_modules`。`.git` 是 Git 的版本库元数据，必须留在项目根目录，但也不会上传为项目文件。
+Python 开发环境固定放在 `.aniu/local/.venv`，MyPy、Pytest、Ruff、Python 字节码、Vite、TypeScript、npm 和 pip 的 Aniu 专属缓存也固定放在 `.aniu/local/`，不会再在源码树生成这些缓存；本地参考源码、参考项目和图片位于 `.aniu/docs/`。`.aniu/dev.py` 是仅供本机开发使用的启动器，不进入 GitHub；新克隆的公共代码可直接使用 `backend.serve` 和前端 npm 命令，生产环境使用 `backend.serve` 或 Docker。前端依赖仍放在被 Git 忽略的 `frontend/node_modules/`，不搬入 `.aniu`，以避免 Node 工具解析异常；根目录不需要 `node_modules`。`.git` 是 Git 的版本库元数据，必须留在项目根目录，但也不会上传为项目文件。
 
 本地 Docker Compose 配置保存在 `.aniu/local/.env`。使用 Compose 时通过 `--env-file .aniu/local/.env` 读取它；直接运行 Python 时，`.env` 不会自动注入进程环境。
 

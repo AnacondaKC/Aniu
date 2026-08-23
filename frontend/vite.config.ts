@@ -61,6 +61,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  cacheDir: path.resolve(__dirname, "../.aniu/local/frontend-vite"),
   server: {
     allowedHosts,
     hmr,
