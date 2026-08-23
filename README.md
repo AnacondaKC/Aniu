@@ -214,7 +214,21 @@ docker compose --env-file .aniu/local/.env ps
 curl http://127.0.0.1:8000/health/ready
 ```
 
-访问 <http://127.0.0.1:8000> 即可使用容器内构建的前端。停止服务但保留数据：
+访问 <http://127.0.0.1:8000> 即可使用容器内构建的前端。
+
+### GitHub Release 镜像
+
+每次发布正式 GitHub Release，GitHub Actions 会构建并推送 Linux <code>amd64</code> 镜像到 <code>ghcr.io/anacondakc/aniu</code>。镜像包含 Release 原始标签、可解析的语义版本标签和提交 SHA 标签；正式版还会更新 <code>latest</code>，预发布版不会更新 <code>latest</code>。
+
+使用指定 Release 镜像部署：
+
+```bash
+export ANIU_IMAGE=ghcr.io/anacondakc/aniu:v1.0.0
+docker pull "$ANIU_IMAGE"
+docker compose --env-file .aniu/local/.env up -d --no-build --force-recreate
+```
+
+首次发布后，需要在 GitHub Packages 将 <code>aniu</code> 容器包设置为 Public，外部用户才能无需登录拉取镜像。停止服务但保留数据：
 
 ```bash
 docker compose --env-file .aniu/local/.env down
