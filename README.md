@@ -236,6 +236,19 @@ docker compose --env-file .aniu/local/.env down
 
 > 不要随意使用 <code>docker compose down -v</code>，删除卷会同时删除配置、密钥和运行历史。容器默认启用调度器；SQLite 与进程内调度器适合单实例运行。
 
+### Linux 内网一键部署
+
+[<code>compose.lan.yaml</code>](./compose.lan.yaml) 是面向 Linux Docker 主机的免 <code>.env</code> 内网部署模板。它使用 <code>latest</code>、自动发现主机 LAN 地址，并在首次启动时生成并持久化随机登录 Token。
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/AnacondaKC/Aniu/main/compose.lan.yaml
+docker compose -f compose.lan.yaml up -d
+docker compose -f compose.lan.yaml logs aniu
+hostname -I
+```
+
+从日志中保存 <code>Aniu first-run login token</code> 的值，然后通过 <code>http://&lt;hostname -I 输出的内网 IP&gt;:8000</code> 登录。该模板使用 Host 网络模式，只适用于 Linux；只应部署在可信内网，外网访问应使用 HTTPS 反向代理。
+
 ## 配置
 
 Compose 的基础模板位于 [<code>.env.example</code>](./.env.example)，真正的密钥建议只放在被 Git 忽略的 <code>.aniu/local/.env</code> 中。
@@ -321,6 +334,7 @@ Aniu/
 ├── docs/screenshots/ # README 页面截图
 ├── Dockerfile
 ├── compose.yaml
+├── compose.lan.yaml # Linux 免 .env 内网部署
 ├── install.sh
 ├── pyproject.toml
 └── requirements.lock
