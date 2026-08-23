@@ -326,7 +326,9 @@ Aniu/
 
 感谢 FastAPI、React、Vite、Tailwind CSS、Radix UI、TanStack Query 以及其他开源项目提供的基础设施。Aniu 同时接入妙想和公开行情数据适配器，相关服务请遵循各自的使用条款。
 
-> 许可证：当前仓库未包含 <code>LICENSE</code> 文件，使用和二次分发前请以项目实际发布说明为准。
+## 许可证
+
+本项目采用 [Apache License 2.0](LICENSE) 开源。
 
 ## Star History
 

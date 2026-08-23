@@ -2,6 +2,7 @@
 name = "aniubot"
 version = "0.1.0"
 description = "Aniu — 基于股票交易的可进化智能体系统"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.12"
 
 dependencies = [
