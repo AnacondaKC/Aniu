@@ -325,7 +325,7 @@ def create_app(config: RuntimeConfig | None = None) -> FastAPI:
     application = FastAPI(
         title="Aniu",
         description="基于股票交易的可进化智能体系统",
-        version="1.0.1",
+        version="1.0.2",
         lifespan=_lifespan(resolved),
     )
     application.state.runtime = AppRuntime(config=resolved)

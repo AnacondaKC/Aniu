@@ -24,15 +24,17 @@ WORKDIR /app
 COPY requirements.lock ./
 COPY backend ./backend
 COPY --from=frontend-build /build/frontend/dist ./frontend/dist
+COPY docker-entrypoint.sh /usr/local/bin/aniu-entrypoint
 
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock \
+    && chmod 0755 /usr/local/bin/aniu-entrypoint \
     && groupadd --system --gid 10001 aniu \
     && useradd --system --uid 10001 --gid aniu \
         --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin aniu \
     && mkdir -p /app/data \
     && chown -R aniu:aniu /app
 
-USER aniu
+USER root
 
 EXPOSE 8000
 VOLUME ["/app/data"]
@@ -40,5 +42,5 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=4)"]
 
-ENTRYPOINT ["python", "-m", "backend.serve"]
+ENTRYPOINT ["/usr/local/bin/aniu-entrypoint", "python", "-m", "backend.serve"]
 CMD ["--host", "0.0.0.0", "--port", "8000"]

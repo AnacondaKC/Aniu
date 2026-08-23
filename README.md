@@ -216,6 +216,17 @@ curl http://127.0.0.1:8000/health/ready
 
 访问 <http://127.0.0.1:8000> 即可使用容器内构建的前端。
 
+### 使用宿主机目录保存数据
+
+默认命名卷最省心；如需把数据保存在当前目录，可将服务卷改为：
+
+```yaml
+volumes:
+  - ./data:/app/data
+```
+
+Release 镜像会在启动时自动修复 <code>./data</code> 的挂载根目录权限，然后以非 root 用户运行应用；首次使用无需手动执行 <code>chown</code>。该目录会保存数据库、登录密钥和日志，勿提交到 Git。若使用不支持 Linux <code>chown</code> 的网络盘或特殊文件系统，仍应改用 Docker 命名卷。
+
 ### GitHub Release 镜像
 
 每次发布正式 GitHub Release，GitHub Actions 会构建并推送 Linux <code>amd64</code> 镜像到 <code>ghcr.io/anacondakc/aniu</code>。镜像包含 Release 原始标签、可解析的语义版本标签和提交 SHA 标签；正式版还会更新 <code>latest</code>，预发布版不会更新 <code>latest</code>。
@@ -223,7 +234,7 @@ curl http://127.0.0.1:8000/health/ready
 使用指定 Release 镜像部署：
 
 ```bash
-export ANIU_IMAGE=ghcr.io/anacondakc/aniu:v1.0.1
+export ANIU_IMAGE=ghcr.io/anacondakc/aniu:v1.0.2
 docker pull "$ANIU_IMAGE"
 docker compose --env-file .aniu/local/.env up -d --no-build --force-recreate
 ```
