@@ -1,0 +1,77 @@
+[project]
+name = "aniubot"
+version = "0.1.0"
+description = "Aniu — 基于股票交易的可进化智能体系统"
+requires-python = ">=3.12"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    "httpx>=0.28",
+    "openai>=2.32,<3",
+    "anthropic>=0.120,<1",
+    "pydantic>=2.0",
+    "apscheduler>=3.10",
+    "cryptography>=44.0",
+    "pwdlib[argon2]>=0.2",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+    "mypy>=1.15",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = {find = {where = ["."], include = ["backend*"], exclude = ["backend.tests*"]}}
+
+[tool.setuptools.package-data]
+"backend.infra.calendar" = ["data/*.json"]
+[tool.ruff]
+target-version = "py312"
+cache-dir = ".aniu/local/.ruff_cache"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+cache_dir = ".aniu/local/.mypy_cache"
+strict = true
+packages = ["backend"]
+exclude = ["^backend/tests/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "apscheduler",
+    "apscheduler.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+cache_dir = ".aniu/local/.pytest_cache"
+testpaths = ["backend/tests"]
+pythonpath = ["."]

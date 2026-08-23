@@ -1,0 +1,26 @@
+name: aniubot
+
+services:
+  aniubot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${ANIU_IMAGE:-aniubot:local}
+    ports:
+      - "${ANIU_PORT:-8000}:8000"
+    environment:
+      ANIU_ALLOWED_HOSTS: ${ANIU_ALLOWED_HOSTS:-localhost,127.0.0.1,localhost.localdomain}
+      ANIU_CORS_ORIGINS: ${ANIU_CORS_ORIGINS:-http://localhost:8000}
+      ANIU_LOG_LEVEL: ${ANIU_LOG_LEVEL:-info}
+      ANIU_MASTER_SECRET_KEY: ${ANIU_MASTER_SECRET_KEY:-}
+      ANIU_MASTER_SECRET_KEY_PREVIOUS: ${ANIU_MASTER_SECRET_KEY_PREVIOUS:-}
+    volumes:
+      - aniu-data:/app/data
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  aniu-data:

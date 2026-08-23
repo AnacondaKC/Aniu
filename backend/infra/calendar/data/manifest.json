@@ -1,0 +1,24 @@
+{
+  "exchange": "XSHG",
+  "timezone": "Asia/Shanghai",
+  "source": "manual curated A-share calendar",
+  "generated_at": "2026-07-24T07:22:51+00:00",
+  "covered_years": [
+    2026,
+    2027
+  ],
+  "files": [
+    {
+      "file": "xshg-2026.json",
+      "year": 2026,
+      "count": 242,
+      "sha256": "fe34899bcbc7d17316fb108ef7d8df844dd916ea0a398db0f85f149d051bce9e"
+    },
+    {
+      "file": "xshg-2027.json",
+      "year": 2027,
+      "count": 242,
+      "sha256": "a5c4cc086ee72dbd85c545763f573f3c21b062bb99acb7612dc5824de0984492"
+    }
+  ]
+}

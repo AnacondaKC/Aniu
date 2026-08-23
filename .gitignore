@@ -1,0 +1,78 @@
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+*.egg
+dist/
+build
+.venv
+venv/
+
+# Environment
+/AGENTS.md
+/THIRD_PARTY_NOTICES.md
+/dev.py
+.env
+.env.local
+.env.*.local
+
+# Database & local runtime data
+.aniu/
+data/
+!backend/infra/
+!backend/infra/calendar/
+!backend/infra/calendar/data/
+!backend/infra/calendar/data/*.json
+*.db
+*.sqlite3
+*.sqlite3-*
+
+# Local logs
+*.log
+
+# Local API credentials
+dev.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov/
+.tox/
+
+# MyPy
+.mypy_cache
+
+# Ruff
+.ruff_cache
+
+# OpenCode
+.opencode/
+
+# Local documentation and reference material
+/docs/
+
+# Node dependencies and build output (kept outside Git)
+node_modules
+frontend/.vite
+
+# Local probes and private UI captures
+scripts/tdx_probe
+/账户总览.png
+/任务运行.png
+/记忆梦境.png
+/行情总览.png
+/工具管理.png
+/工具调用.png
+/xiaoan.ico
+/xiaoan.jpeg
+/xiaoan形象.jpeg

@@ -1,0 +1,1 @@
+"""Stock API boundary tests."""

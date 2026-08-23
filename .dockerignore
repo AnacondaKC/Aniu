@@ -1,0 +1,32 @@
+.git
+.gitignore
+AGENTS.md
+.env
+.env.*
+.venv
+venv
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+.tox
+
+# Local runtime state
+/.aniu
+/data
+*.sqlite3
+*.sqlite3-*
+*.db
+*.log
+
+# Frontend dependencies and build output
+frontend/node_modules
+frontend/dist
+
+# Development and repository-only material
+backend/tests
+frontend/*.tsbuildinfo

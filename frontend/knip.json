@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/**/*.{test,spec}.{ts,tsx}"],
+  "project": ["src/**/*.{ts,tsx,css}"],
+  "ignore": ["src/generated/**", "src/components/ui/**"],
+  "ignoreDependencies": ["@fontsource-variable/inter"]
+}

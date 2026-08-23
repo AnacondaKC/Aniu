@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend
+        run: ./scripts/install_python_dev.sh python
+      - name: Ruff
+        run: python -m ruff check backend scripts
+      - name: Mypy
+        run: python -m mypy backend
+      - name: Pytest
+        run: python -m pytest backend/tests -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend (for OpenAPI export)
+        working-directory: .
+        run: |
+          mkdir -p .aniu/local
+          python -m venv .aniu/local/.venv
+          ./scripts/install_python_dev.sh ./.aniu/local/.venv/bin/python
+      - name: Install frontend
+        run: npm ci --include=dev
+      - name: Dependency audit
+        run: npm run audit
+      - name: OpenAPI contract check
+        run: npm run api:check
+      - name: ESLint
+        run: npm run lint -- --max-warnings=0
+      - name: Vitest
+        run: npm test
+      - name: Typecheck + build
+        run: npm run build
