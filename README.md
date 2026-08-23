@@ -246,7 +246,7 @@ Compose 的基础模板位于 [<code>.env.example</code>](./.env.example)，真�
 | <code>ANIU_PORT</code>                       | 服务端口                      | <code>8000</code>                                        |
 | <code>ANIU_BIND_ADDRESS</code>               | Compose 端口绑定地址          | <code>127.0.0.1</code>                                   |
 | <code>ANIU_LAN</code>                        | 是否启用局域网模式            | 源码默认关闭，Docker 模板默认关闭                        |
-| <code>ANIU_ALLOWED_HOSTS</code>              | LAN 模式允许的精确 Host 列表  | 不支持 <code>*</code> 通配符                             |
+| <code>ANIU_ALLOWED_HOSTS</code>              | LAN 模式允许的 Host 列表      | 填 <code>*</code> 时接受任意 Host；仅限可信内网使用      |
 | <code>ANIU_CORS_ORIGINS</code>               | 独立前端访问后端时的来源列表  | 本地服务地址                                             |
 | <code>ANIU_ENABLE_SCHEDULER</code>           | 是否启用进程内调度器          | 源码默认关闭，Docker 默认开启                            |
 | <code>ANIU_DATA_DIR</code>                   | 数据库、密钥和日志目录        | 源码为 <code>.aniu</code>，容器为 <code>/app/data</code> |
@@ -332,7 +332,7 @@ Aniu/
 
 - 不要把 Token、模型 API Key、妙想密钥或主密钥提交到 Git。
 - 不要通过 <code>VITE_*</code> 变量传递后端秘密；这类变量会进入前端开发或构建环境。
-- LAN 模式必须配置精确的 <code>ANIU_ALLOWED_HOSTS</code>，并通过 HTTPS 反向代理或 SSH 隧道保护登录流量。
+- LAN 模式可配置精确的 <code>ANIU_ALLOWED_HOSTS</code>，或在可信内网显式设置为 <code>*</code>；外网访问应通过 HTTPS 反向代理或 SSH 隧道保护登录流量。
 - 妙想及行情服务受其自身额度、稳定性和使用条款约束。
 - 项目用于研究与模拟交易，不提供投资建议；请在充分验证后决定是否采用任何分析结果。
 

@@ -76,11 +76,27 @@ def test_runtime_config_rejects_short_auth_tokens() -> None:
 
 @pytest.mark.parametrize(
     "host",
-    ("*", "*.example.internal", "https://aniu.internal", "aniu.internal:8000"),
+    ("*.example.internal", "https://aniu.internal", "aniu.internal:8000"),
 )
-def test_allowed_hosts_reject_wildcards_and_non_host_values(host: str) -> None:
+def test_allowed_hosts_reject_partial_wildcards_and_non_host_values(host: str) -> None:
     with pytest.raises(ValueError, match="allowed_hosts|invalid allowed host"):
         normalize_allowed_hosts((host,))
+
+
+def test_allowed_hosts_normalize_standalone_wildcard() -> None:
+    assert normalize_allowed_hosts(("aniu.internal", "*", "192.168.1.20")) == ("*",)
+
+
+def test_runtime_config_reads_wildcard_host_from_lan_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ANIU_LAN", "true")
+    monkeypatch.setenv("ANIU_ALLOWED_HOSTS", "*")
+
+    config = RuntimeConfig.from_env()
+
+    assert config.lan_mode is True
+    assert config.allowed_hosts == ("*",)
 
 
 def test_allowed_hosts_normalize_exact_hosts() -> None:

@@ -35,15 +35,17 @@ _HOST_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
 
 def normalize_allowed_hosts(hosts: tuple[str, ...]) -> tuple[str, ...]:
-    """Normalize exact TrustedHost entries and reject unsafe wildcards."""
+    """Normalize TrustedHost entries and permit only a standalone wildcard."""
 
     normalized: list[str] = []
     for raw_host in hosts:
         host = raw_host.strip().lower().rstrip(".")
         if not host:
             raise ValueError("allowed_hosts must not contain empty entries")
+        if host == "*":
+            return ("*",)
         if "*" in host:
-            raise ValueError("allowed_hosts must not contain wildcards")
+            raise ValueError("allowed_hosts only permits '*' as a standalone value")
         try:
             host = str(ipaddress.ip_address(host))
         except ValueError:

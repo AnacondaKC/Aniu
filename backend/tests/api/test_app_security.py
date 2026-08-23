@@ -67,6 +67,22 @@ async def test_trusted_host_cors_and_security_headers() -> None:
 
 
 @pytest.mark.asyncio
+async def test_trusted_host_allows_explicit_wildcard() -> None:
+    application = create_app(
+        RuntimeConfig(
+            serve_frontend=False,
+            lan_mode=True,
+            allowed_hosts=("*",),
+        )
+    )
+    transport = ASGITransport(app=application)
+    async with AsyncClient(transport=transport, base_url="http://aniu.lan") as client:
+        response = await client.get("/health/live")
+
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_readiness_checks_database_worker_and_calendar_in_lan_mode(
     tmp_path: Path,
 ) -> None:
