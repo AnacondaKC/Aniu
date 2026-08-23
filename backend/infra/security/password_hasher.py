@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pwdlib import PasswordHash
 
+from backend.business.auth.token_policy import TOKEN_MIN_LENGTH
+
 _HASHER = PasswordHash.recommended()
 
 
 def hash_password(password: str) -> str:
-    if not password or len(password) < 8:
-        raise ValueError("password must be at least 8 characters")
+    if not password or len(password) < TOKEN_MIN_LENGTH:
+        raise ValueError(f"password must be at least {TOKEN_MIN_LENGTH} characters")
     return _HASHER.hash(password)
 
 

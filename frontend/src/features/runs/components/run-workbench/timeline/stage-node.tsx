@@ -26,7 +26,7 @@ function toneFor(status: StageStatus, isCurrent: boolean) {
   if (status === "running" && isCurrent) {
     return {
       label: "进行中",
-      status: "text-sky-600 dark:text-sky-400",
+      status: "text-sky-600 ",
       row: "bg-sky-500/[0.04]",
     };
   }
@@ -41,25 +41,25 @@ function toneFor(status: StageStatus, isCurrent: boolean) {
     case "completed":
       return {
         label: "完成",
-        status: "text-emerald-500 dark:text-emerald-400",
+        status: "text-emerald-500 ",
         row: "",
       };
     case "degraded":
       return {
         label: "已回退",
-        status: "text-amber-600 dark:text-amber-400",
+        status: "text-amber-600 ",
         row: "bg-amber-500/[0.03]",
       };
     case "failed":
       return {
         label: "失败",
-        status: "text-rose-500 dark:text-rose-300",
+        status: "text-rose-500 ",
         row: "bg-destructive/[0.03]",
       };
     case "skipped":
       return {
         label: "跳过",
-        status: "text-amber-600 dark:text-amber-400",
+        status: "text-amber-600 ",
         row: "",
       };
     default:
@@ -119,7 +119,7 @@ function ToolCallText({ calls, isLive }: { calls: ProcessToolCall[]; isLive: boo
             key={group.name}
             className={cn(
               "inline-flex max-w-[6rem] shrink-0 items-center gap-0.5 truncate whitespace-nowrap",
-              group.running && "text-sky-600 dark:text-sky-400",
+              group.running && "text-sky-600",
             )}
             title={title}
           >
@@ -147,7 +147,7 @@ function StageOutcomeBadge({ stage }: { stage: TraceStage }) {
       variant="outline"
       aria-label="HTML 总结失败，已回退 Markdown"
       title={stage.steps.find((step) => step.step_id === "markdown_fallback")?.summary ?? undefined}
-      className="h-4 gap-1 rounded-sm border-amber-500/25 bg-amber-500/[0.08] px-1.5 py-0 text-[9px] leading-none font-medium text-amber-700 dark:text-amber-300"
+      className="h-4 gap-1 rounded-sm border-amber-500/25 bg-amber-500/[0.08] px-1.5 py-0 text-[9px] leading-none font-medium text-amber-700"
     >
       Markdown 回退
     </Badge>

@@ -253,6 +253,17 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
 
     _upgrade_memory_schema(connection)
 
+    auth_session_columns = {
+        column["name"] for column in inspect(connection).get_columns("auth_sessions")
+    }
+    if "credential_fingerprint" not in auth_session_columns:
+        connection.execute(
+            text(
+                "ALTER TABLE auth_sessions ADD COLUMN credential_fingerprint "
+                "VARCHAR(128) NOT NULL DEFAULT ''"
+            )
+        )
+
     activity_columns = {
         column["name"]
         for column in inspect(connection).get_columns("memory_activities")

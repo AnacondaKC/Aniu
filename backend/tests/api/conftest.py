@@ -29,6 +29,17 @@ from backend.llm import ModelCatalogItem, ModelProtocol
 from backend.main import app
 from backend.stock_api import MxClients
 
+TEST_AUTH_TOKEN = "test-auth-token"
+
+
+async def authenticate_api_client(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/aniu/auth/setup",
+        json={"token": TEST_AUTH_TOKEN},
+    )
+    assert response.status_code == 201
+    client.headers["X-CSRF-Token"] = response.json()["csrf_token"]
+
 
 class DisabledJobRunner:
     """No-op schedule runner for API tests that do not assert scheduler side effects."""
@@ -141,6 +152,7 @@ async def api_client(session_factory, fake_model_tester) -> AsyncIterator[AsyncC
     app.state.runtime.mx_clients = mx_clients
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate_api_client(client)
         yield client
     app.dependency_overrides.clear()
     await mx_clients.aclose()
@@ -180,8 +192,7 @@ class FakeLLMClient:
         if "Active stage: Summary" in prompt or "summary_stage_payload" in prompt:
             return {
                 "content": (
-                    "<article><h1>运行总结</h1>"
-                    "<p>本轮未执行交易。</p></article>"
+                    "<article><h1>运行总结</h1><p>本轮未执行交易。</p></article>"
                 ),
                 "tool_calls": [],
             }
@@ -253,6 +264,7 @@ async def run_api_client(session_factory) -> AsyncIterator[AsyncClient]:
     app.state.runtime.run_worker = run_worker
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate_api_client(client)
         yield client
     await run_worker.stop()
     app.state.runtime.mx_clients = None

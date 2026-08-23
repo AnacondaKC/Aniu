@@ -318,6 +318,68 @@ async def test_init_db_adds_run_job_claim_token_to_existing_sqlite_database(
 
 
 @pytest.mark.asyncio
+async def test_init_db_adds_session_credential_fingerprint_to_existing_database(
+    tmp_path,
+) -> None:
+    sqlite_path = tmp_path / "existing-auth-sessions.sqlite3"
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE auth_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash VARCHAR(128) NOT NULL UNIQUE,
+                csrf_token_hash VARCHAR(128) NOT NULL,
+                expires_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                revoked_at TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO auth_sessions (
+                token_hash, csrf_token_hash, expires_at, last_seen_at, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-token",
+                "legacy-csrf",
+                "2030-01-01T00:00:00+00:00",
+                "2025-01-01T00:00:00+00:00",
+                "2025-01-01T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    engine = create_engine(build_database_url(sqlite_path))
+    try:
+        await init_db(engine)
+        await init_db(engine)
+    finally:
+        await engine.dispose()
+
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(auth_sessions)").fetchall()
+        }
+        fingerprint = connection.execute(
+            "SELECT credential_fingerprint FROM auth_sessions WHERE token_hash = ?",
+            ("legacy-token",),
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert "credential_fingerprint" in columns
+    assert fingerprint == ("",)
+
+
+@pytest.mark.asyncio
 async def test_init_db_adds_schedule_and_position_columns_to_existing_database(
     tmp_path,
 ) -> None:

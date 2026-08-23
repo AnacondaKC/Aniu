@@ -395,7 +395,7 @@ function AccountKeyPrompt() {
       className="border-border/60 bg-muted/20 flex flex-col gap-4 rounded-lg border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex min-w-0 items-start gap-3">
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300">
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-amber-700">
           <CircleAlertIcon className="size-4" />
         </span>
         <div className="min-w-0">
@@ -518,7 +518,7 @@ function AccountOverview({
       {query.isError ? (
         <div
           role="alert"
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800"
         >
           正在显示上次成功加载的数据；后台刷新失败：{getErrorMessage(query.error)}
         </div>

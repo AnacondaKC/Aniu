@@ -7,16 +7,12 @@ import {
   OctagonXIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme } = useTheme();
-  const resolvedTheme = (theme ?? "system") as NonNullable<ToasterProps["theme"]>;
-
   return (
     <Sonner
-      theme={resolvedTheme}
+      theme="light"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

@@ -54,13 +54,13 @@ async def test_login_locks_after_repeated_failures() -> None:
     )
     for _ in range(5):
         with pytest.raises(UnauthorizedError):
-            await service.login("aniu", "wrong")
+            await service.login("wrong-token")
     with pytest.raises(UnauthorizedError, match="too many failed login attempts"):
-        await service.login("aniu", "wrong")
+        await service.login("wrong-token")
 
 
 @pytest.mark.asyncio
-async def test_wrong_username_shares_the_single_identity_lockout() -> None:
+async def test_failed_tokens_share_the_single_identity_lockout() -> None:
     identity = LocalIdentity(
         username="aniu",
         password_hash=hash_password("correct-password"),
@@ -74,6 +74,6 @@ async def test_wrong_username_shares_the_single_identity_lockout() -> None:
     )
     for attempt in range(5):
         with pytest.raises(UnauthorizedError):
-            await service.login(f"not-aniu-{attempt}", "wrong")
+            await service.login(f"wrong-token-{attempt}")
     with pytest.raises(UnauthorizedError, match="too many failed login attempts"):
-        await service.login("aniu", "correct-password")
+        await service.login("correct-password")

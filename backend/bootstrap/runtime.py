@@ -184,6 +184,7 @@ class AppRuntime:
             password_hasher=hash_password,
             password_verifier=verify_password,
             login_throttle=self.auth_login_throttle,
+            configured_token=self.config.auth_token,
             committer=session,
         )
 

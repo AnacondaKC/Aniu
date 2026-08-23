@@ -181,10 +181,10 @@ function SystemToolsPanel() {
 
 function StockApiProviderBadge({ provider }: { provider: StockApiPublicProvider }) {
   const providerClass: Record<StockApiPublicProvider, string> = {
-    eastmoney: "border-orange-500/25 bg-orange-500/[0.08] text-orange-700 dark:text-orange-300",
-    tencent: "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-700 dark:text-cyan-300",
-    sina: "border-rose-500/25 bg-rose-500/[0.08] text-rose-700 dark:text-rose-300",
-    mx: "border-violet-500/25 bg-violet-500/[0.08] text-violet-700 dark:text-violet-300",
+    eastmoney: "border-orange-500/25 bg-orange-500/[0.08] text-orange-700 ",
+    tencent: "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-700 ",
+    sina: "border-rose-500/25 bg-rose-500/[0.08] text-rose-700 ",
+    mx: "border-violet-500/25 bg-violet-500/[0.08] text-violet-700 ",
   };
 
   return (
@@ -215,9 +215,9 @@ function StockApiProviderBadges({
 
 function StockApiToolSourceBadge({ source }: { source: StockApiLogToolSource }) {
   const sourceClass: Record<StockApiLogToolSource, string> = {
-    public: "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-700 dark:text-cyan-300",
-    aggregate: "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700 dark:text-emerald-300",
-    mx: "border-violet-500/25 bg-violet-500/[0.08] text-violet-700 dark:text-violet-300",
+    public: "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-700 ",
+    aggregate: "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700 ",
+    mx: "border-violet-500/25 bg-violet-500/[0.08] text-violet-700 ",
   };
 
   return (
@@ -332,7 +332,7 @@ function StockApiLogsPanel() {
                         className={cn(
                           "h-5 rounded-sm px-1.5 text-[11px] font-medium",
                           item.status === "success"
-                            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
                             : "border-destructive/25 bg-destructive/10 text-destructive",
                         )}
                       >
@@ -436,7 +436,7 @@ export function StockApiSettingsPage() {
                   aria-controls="stock-api-settings-panel"
                   variant="ghost"
                   className={cn(
-                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent h-9 w-full justify-start gap-2 rounded-md px-3",
+                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground h-9 w-full justify-start gap-2 rounded-md px-3",
                     selected && "bg-sidebar-accent text-sidebar-accent-foreground",
                   )}
                   onClick={() => setActiveTab(item.id)}

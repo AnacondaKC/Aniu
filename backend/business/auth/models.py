@@ -27,6 +27,7 @@ class AuthSession:
     token_hash: str
     csrf_token_hash: str
     expires_at: datetime
+    credential_fingerprint: str = ""
     last_seen_at: datetime = field(default_factory=utc_now)
     revoked_at: datetime | None = None
     session_id: int = 0

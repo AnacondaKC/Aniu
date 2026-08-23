@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from backend.business.auth.ports import (
     AuthSessionRepositoryPort,
     LocalIdentityRepositoryPort,
 )
+from backend.business.auth.token_policy import normalize_token
 from backend.business.shared import DomainError
 
 SESSION_COOKIE = "aniu_session"
@@ -22,6 +24,7 @@ SESSION_TOUCH_INTERVAL = timedelta(hours=1)
 CSRF_HEADER = "X-CSRF-Token"
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCK_SECONDS = 60.0
+TOKEN_IDENTITY_USERNAME = "aniu"
 
 PasswordHasher = Callable[[str], str]
 PasswordVerifier = Callable[[str, str], bool]
@@ -86,6 +89,14 @@ def _csrf_token(raw_session_token: str) -> str:
     return _hash_token(f"csrf:{raw_session_token}")
 
 
+def _credential_fingerprint(raw_session_token: str, credential_material: str) -> str:
+    return hmac.new(
+        raw_session_token.encode("utf-8"),
+        credential_material.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 class AuthAppService:
     def __init__(
         self,
@@ -95,48 +106,66 @@ class AuthAppService:
         password_hasher: PasswordHasher,
         password_verifier: PasswordVerifier,
         login_throttle: AuthLoginThrottle,
+        configured_token: str | None = None,
         committer: object | None = None,
     ) -> None:
         self._identity = identity_repo
         self._sessions = session_repo
         self._hash_password = password_hasher
+        self._configured_token = configured_token
         self._verify_password = password_verifier
         self._login_throttle = login_throttle
         self._committer = committer
 
     async def identity_initialized(self) -> bool:
-        """Whether the local identity has been initialized."""
+        """Whether a deployment-wide or local token is ready for login."""
 
+        if self._configured_token is not None:
+            return True
         return await self._identity.get() is not None
 
-    async def setup(self, username: str, password: str) -> LoginResult:
+    async def setup(self, token: str) -> LoginResult:
+        """Create the local token credential during first-run loopback setup."""
+
+        if self._configured_token is not None:
+            raise AuthError("token authentication is configured; setup is disabled")
         if await self._identity.get() is not None:
             raise AuthError("identity already initialized")
-        username = username.strip()
-        if not username:
-            raise ValueError("username is required")
+        token = normalize_token(token)
         identity = await self._identity.initialize(
-            username=username,
-            password_hash=self._hash_password(password),
+            username=TOKEN_IDENTITY_USERNAME,
+            password_hash=self._hash_password(token),
         )
         self._login_throttle.reset()
         result = await self._create_session(identity)
         await self._commit()
         return result
 
-    async def login(self, username: str, password: str) -> LoginResult:
-        identity = await self._identity.get()
-        if identity is None:
-            raise UnauthorizedError("invalid username or password")
+    async def login(self, token: str) -> LoginResult:
+        """Verify a token and issue a short-lived browser session."""
+
         self._login_throttle.raise_if_locked()
-        supplied_username = username.strip()
-        if not secrets.compare_digest(
-            supplied_username, identity.username
-        ) or not self._verify_password(password, identity.password_hash):
+        supplied_token = normalize_token(token)
+        identity = await self._identity.get()
+        if self._configured_token is not None:
+            valid = secrets.compare_digest(
+                supplied_token.encode("utf-8"),
+                self._configured_token.encode("utf-8"),
+            )
+        else:
+            valid = identity is not None and self._verify_password(
+                supplied_token,
+                identity.password_hash,
+            )
+        if not valid:
             self._login_throttle.register_failure()
-            raise UnauthorizedError("invalid username or password")
+            raise UnauthorizedError("invalid token")
         self._login_throttle.reset()
 
+        # A configured deployment token does not need a database identity. Keep a
+        # stable internal subject for audit records without exposing an account UI.
+        if identity is None:
+            identity = LocalIdentity(username=TOKEN_IDENTITY_USERNAME, password_hash="")
         result = await self._create_session(identity)
         await self._commit()
         return result
@@ -155,6 +184,16 @@ class AuthAppService:
             return None
         identity = await self._identity.get()
         if identity is None:
+            if self._configured_token is None:
+                return None
+            identity = LocalIdentity(username=TOKEN_IDENTITY_USERNAME, password_hash="")
+        expected_fingerprint = self._session_credential_fingerprint(
+            raw_session_token, identity
+        )
+        if not session.credential_fingerprint or not secrets.compare_digest(
+            session.credential_fingerprint,
+            expected_fingerprint,
+        ):
             return None
         if now - session.last_seen_at >= SESSION_TOUCH_INTERVAL:
             await self._sessions.touch(
@@ -188,6 +227,18 @@ class AuthAppService:
         if not secrets.compare_digest(_hash_token(csrf_header), expected):
             raise ForbiddenError("invalid CSRF token")
 
+    def _session_credential_fingerprint(
+        self,
+        raw_session_token: str,
+        identity: LocalIdentity,
+    ) -> str:
+        credential_material = (
+            f"configured:{self._configured_token}"
+            if self._configured_token is not None
+            else f"local:{identity.password_hash}"
+        )
+        return _credential_fingerprint(raw_session_token, credential_material)
+
     async def _create_session(self, identity: LocalIdentity) -> LoginResult:
         raw_session = secrets.token_urlsafe(32)
         raw_csrf = _csrf_token(raw_session)
@@ -196,6 +247,9 @@ class AuthAppService:
             AuthSession(
                 token_hash=_hash_token(raw_session),
                 csrf_token_hash=_hash_token(raw_csrf),
+                credential_fingerprint=self._session_credential_fingerprint(
+                    raw_session, identity
+                ),
                 expires_at=now + SESSION_TTL,
                 last_seen_at=now,
             )

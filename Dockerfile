@@ -17,9 +17,7 @@ ENV PYTHONUNBUFFERED=1 \
     ANIU_DATABASE_URL=sqlite+aiosqlite:////app/data/aniu.sqlite3 \
     ANIU_FRONTEND_DIST=/app/frontend/dist \
     ANIU_SERVE_FRONTEND=1 \
-    ANIU_ENABLE_SCHEDULER=1 \
-    ANIU_LAN=1 \
-    ANIU_ALLOWED_HOSTS=localhost,127.0.0.1,localhost.localdomain
+    ANIU_ENABLE_SCHEDULER=1
 
 WORKDIR /app
 
@@ -43,4 +41,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=4)"]
 
 ENTRYPOINT ["python", "-m", "backend.serve"]
-CMD ["--host", "0.0.0.0", "--port", "8000", "--lan"]
+CMD ["--host", "0.0.0.0", "--port", "8000"]

@@ -8,7 +8,6 @@ const apiMocks = vi.hoisted(() => ({
   fetchAuthSession: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
-  setupIdentity: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => apiMocks);

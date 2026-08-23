@@ -35,8 +35,8 @@ function MxStatusBadge({ configured }: { configured: boolean }) {
       className={cn(
         "h-5 gap-1 rounded-sm px-1.5 text-[11px] leading-none font-medium",
         configured
-          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-          : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-700",
       )}
     >
       {configured ? (

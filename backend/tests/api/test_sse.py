@@ -12,6 +12,7 @@ from httpx import AsyncClient
 
 from backend.api.security import require_stream_authenticated
 from backend.api.sse.stream_hub import StreamHub, stream_run_snapshot
+from backend.business.auth.service import UnauthorizedError
 
 
 @pytest.mark.asyncio
@@ -157,10 +158,10 @@ async def test_sse_authentication_releases_its_session_before_route_execution() 
         app=SimpleNamespace(state=SimpleNamespace(runtime=Runtime())),
     )
 
-    principal = await require_stream_authenticated(  # type: ignore[arg-type]
-        request,
-        None,
-    )
+    with pytest.raises(UnauthorizedError):
+        await require_stream_authenticated(  # type: ignore[arg-type]
+            request,
+            None,
+        )
 
-    assert principal is None
     assert session_active is False

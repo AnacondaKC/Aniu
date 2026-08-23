@@ -138,7 +138,7 @@ export function ModelChannelsSettingsPage() {
       {channelsQuery.error ? (
         <div
           role="alert"
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800"
         >
           正在显示上次成功加载的模型渠道；后台刷新失败：{getErrorMessage(channelsQuery.error)}
         </div>

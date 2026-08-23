@@ -54,10 +54,7 @@ function SyncStatusBadge({ schedule }: { schedule?: StrategySchedule | undefined
       <Badge
         key="unsaved"
         variant="outline"
-        className={cn(
-          statusBadgeClass,
-          "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-        )}
+        className={cn(statusBadgeClass, "border-amber-500/30 bg-amber-500/10 text-amber-700")}
       >
         <CircleDashedIcon />
         未保存
@@ -81,10 +78,7 @@ function SyncStatusBadge({ schedule }: { schedule?: StrategySchedule | undefined
       <Badge
         key="synced"
         variant="outline"
-        className={cn(
-          statusBadgeClass,
-          "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-        )}
+        className={cn(statusBadgeClass, "border-emerald-500/25 bg-emerald-500/10 text-emerald-700")}
       >
         <CheckCircle2Icon />
         已同步
@@ -95,10 +89,7 @@ function SyncStatusBadge({ schedule }: { schedule?: StrategySchedule | undefined
     <Badge
       key="pending"
       variant="outline"
-      className={cn(
-        statusBadgeClass,
-        "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-      )}
+      className={cn(statusBadgeClass, "border-sky-500/30 bg-sky-500/10 text-sky-700")}
     >
       <RefreshCwIcon />
       待同步

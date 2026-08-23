@@ -522,6 +522,12 @@ class AuthSessionModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     csrf_token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    credential_fingerprint: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="",
+        server_default="",
+    )
     expires_at: Mapped[str] = mapped_column(Text, nullable=False)
     last_seen_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
     revoked_at: Mapped[str | None] = mapped_column(Text, nullable=True)

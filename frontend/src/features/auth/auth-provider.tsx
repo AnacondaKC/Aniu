@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import {
-  setupIdentity,
-  fetchAuthSession,
-  login as loginRequest,
-  logout as logoutRequest,
-} from "@/lib/api";
+import { fetchAuthSession, login as loginRequest, logout as logoutRequest } from "@/lib/api";
 import { getAuthSession, subscribeAuthSession, type AuthSessionState } from "@/lib/auth-session";
 import { AuthContext, type AuthContextValue } from "@/features/auth/auth-context";
 import { Spinner } from "@/components/ui/spinner";
@@ -72,11 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...session,
       loading,
       refresh,
-      login: async (username, password) => {
-        await loginRequest(username, password);
-      },
-      setup: async (username, password) => {
-        await setupIdentity(username, password);
+      login: async (token) => {
+        await loginRequest(token);
       },
       logout: async () => {
         await logoutRequest();

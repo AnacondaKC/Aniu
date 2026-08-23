@@ -7,11 +7,13 @@ services:
       dockerfile: Dockerfile
     image: ${ANIU_IMAGE:-aniubot:local}
     ports:
-      - "${ANIU_PORT:-8000}:8000"
+      - "${ANIU_BIND_ADDRESS:-127.0.0.1}:${ANIU_PORT:-8000}:8000"
     environment:
-      ANIU_ALLOWED_HOSTS: ${ANIU_ALLOWED_HOSTS:-localhost,127.0.0.1,localhost.localdomain}
-      ANIU_CORS_ORIGINS: ${ANIU_CORS_ORIGINS:-http://localhost:8000}
+      ANIU_LAN: "${ANIU_LAN:-0}"
+      ANIU_ALLOWED_HOSTS: "${ANIU_ALLOWED_HOSTS:-localhost,127.0.0.1,localhost.localdomain}"
+      ANIU_CORS_ORIGINS: "${ANIU_CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}"
       ANIU_LOG_LEVEL: ${ANIU_LOG_LEVEL:-info}
+      ANIU_AUTH_TOKEN: ${ANIU_AUTH_TOKEN:-}
       ANIU_MASTER_SECRET_KEY: ${ANIU_MASTER_SECRET_KEY:-}
       ANIU_MASTER_SECRET_KEY_PREVIOUS: ${ANIU_MASTER_SECRET_KEY_PREVIOUS:-}
     volumes:

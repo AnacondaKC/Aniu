@@ -75,10 +75,7 @@ function ChannelStatusBadge({ draft }: { draft: ChannelDraft }) {
       <Badge
         key="saving"
         variant="outline"
-        className={cn(
-          statusBadgeClass,
-          "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-        )}
+        className={cn(statusBadgeClass, "border-sky-500/30 bg-sky-500/10 text-sky-700")}
       >
         <Spinner className="size-3" />
         保存中
@@ -102,10 +99,7 @@ function ChannelStatusBadge({ draft }: { draft: ChannelDraft }) {
       <Badge
         key={draft.profileId === null ? "unsaved" : "dirty"}
         variant="outline"
-        className={cn(
-          statusBadgeClass,
-          "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-        )}
+        className={cn(statusBadgeClass, "border-amber-500/30 bg-amber-500/10 text-amber-700")}
       >
         {draft.profileId === null ? <CircleDashedIcon /> : <PencilLineIcon />}
         {draft.profileId === null ? "未保存" : "未保存更改"}
@@ -116,10 +110,7 @@ function ChannelStatusBadge({ draft }: { draft: ChannelDraft }) {
     <Badge
       key="saved"
       variant="outline"
-      className={cn(
-        statusBadgeClass,
-        "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-      )}
+      className={cn(statusBadgeClass, "border-emerald-500/25 bg-emerald-500/10 text-emerald-700")}
     >
       <CheckCircle2Icon />
       已保存
@@ -416,7 +407,7 @@ export function ModelSettingsCard({
                           {modelCount > 0 ? (
                             <span className="tabular-nums">{modelCount} 个模型</span>
                           ) : (
-                            <span className="text-amber-600 dark:text-amber-400">尚未添加模型</span>
+                            <span className="text-amber-600">尚未添加模型</span>
                           )}
                           {savedChannel ? (
                             <>

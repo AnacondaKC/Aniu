@@ -13,11 +13,11 @@ type ProtocolBrand = {
 const PROTOCOL_BRANDS: Record<ModelProtocol, ProtocolBrand> = {
   openai_chat_completions: {
     icon: MessageSquareTextIcon,
-    iconClassName: "text-emerald-600 dark:text-emerald-400",
+    iconClassName: "text-emerald-600 ",
   },
   claude_api: {
     icon: AsteriskIcon,
-    iconClassName: "text-orange-600 dark:text-orange-400",
+    iconClassName: "text-orange-600 ",
   },
 };
 

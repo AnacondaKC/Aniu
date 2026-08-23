@@ -1,43 +1,49 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { BotIcon, KeyRoundIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/features/auth/auth-context";
+import { setupIdentity } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SecretInput } from "@/components/ui/secret-input";
+import { Spinner } from "@/components/ui/spinner";
 
 export function LoginPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const nextPath = params.get("next") || "/";
+  const firstRun = !auth.identityInitialized;
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [token, setToken] = useState("");
   const [pending, setPending] = useState(false);
-
-  const mode = auth.identityInitialized ? ("login" as const) : ("setup" as const);
 
   if (auth.authenticated) {
     return <Navigate replace to={nextPath} />;
   }
 
-  async function onSubmit(event: React.FormEvent) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const normalizedToken = token.trim();
+    if (!normalizedToken) {
+      return;
+    }
+
     setPending(true);
     try {
-      if (mode === "setup") {
-        await auth.setup(username.trim(), password);
-        toast.success("本地身份已创建并登录");
+      if (firstRun) {
+        await setupIdentity(normalizedToken);
+        toast.success("Token 已设置");
       } else {
-        await auth.login(username.trim(), password);
+        await auth.login(normalizedToken);
         toast.success("登录成功");
       }
       void navigate(nextPath, { replace: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "认证失败";
+      const message = error instanceof Error ? error.message : "Token 无效";
       toast.error(message);
     } finally {
       setPending(false);
@@ -45,51 +51,61 @@ export function LoginPage() {
   }
 
   return (
-    <main className="bg-background flex min-h-svh items-center justify-center p-4">
-      <Card className="border-border/70 w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{mode === "setup" ? "初始化本地身份" : "登录 Aniu"}</CardTitle>
-          <CardDescription>
-            {mode === "setup"
-              ? "首次使用请创建本地身份。创建后所有写操作需要登录。"
-              : "使用本地身份登录以管理运行与配置。"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              void onSubmit(event);
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="username">用户名</Label>
-              <Input
-                id="username"
-                autoComplete="username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">密码</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete={mode === "setup" ? "new-password" : "current-password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                minLength={mode === "setup" ? 8 : 1}
-                required
-              />
-            </div>
-            <Button className="w-full" type="submit" disabled={pending}>
-              {pending ? "处理中…" : mode === "setup" ? "创建并登录" : "登录"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <main className="bg-muted/30 flex min-h-svh items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex items-center justify-center gap-3">
+          <div className="bg-primary text-primary-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <BotIcon className="size-5" aria-hidden="true" />
+          </div>
+          <p className="text-foreground text-3xl leading-none font-semibold">Aniu</p>
+        </div>
+
+        <Card className="border-border/70 gap-5 shadow-lg shadow-black/5">
+          <CardHeader className="gap-2">
+            <CardTitle>{firstRun ? "设置访问 Token" : "登录 Aniu"}</CardTitle>
+            <CardDescription>
+              {firstRun ? "首次使用请设置访问 Token。" : "输入访问 Token 继续使用工作台。"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              className="space-y-5"
+              onSubmit={(event) => {
+                void onSubmit(event);
+              }}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="token">访问 Token</Label>
+                <SecretInput
+                  id="token"
+                  name="token"
+                  placeholder="输入访问 Token"
+                  autoComplete={firstRun ? "new-password" : "current-password"}
+                  spellCheck={false}
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  required
+                  minLength={8}
+                  disabled={pending}
+                />
+              </div>
+              <Button className="w-full" type="submit" disabled={pending} aria-busy={pending}>
+                {pending ? (
+                  <>
+                    <Spinner aria-hidden="true" />
+                    验证中
+                  </>
+                ) : (
+                  <>
+                    <KeyRoundIcon aria-hidden="true" />
+                    {firstRun ? "保存并登录" : "登录"}
+                  </>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

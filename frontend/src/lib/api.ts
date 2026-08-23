@@ -144,16 +144,16 @@ export async function fetchAuthSession() {
   return applySession(getResponseData(result));
 }
 
-export async function login(username: string, password: string) {
+export async function login(token: string) {
   const result = await openapiClient.POST("/api/aniu/auth/login", {
-    body: { username, password },
+    body: { token },
   });
   return applySession(getResponseData(result));
 }
 
-export async function setupIdentity(username: string, password: string) {
+export async function setupIdentity(token: string) {
   const result = await openapiClient.POST("/api/aniu/auth/setup", {
-    body: { username, password },
+    body: { token },
   });
   return applySession(getResponseData(result));
 }

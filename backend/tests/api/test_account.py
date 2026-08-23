@@ -22,6 +22,7 @@ from backend.business.shared import ServiceConfigurationError
 from backend.infra.repositories import SettingsRepository
 from backend.main import app
 from backend.stock_api.mx import MxMoniClient
+from backend.tests.api.conftest import authenticate_api_client
 
 
 class FakePortfolioClient:
@@ -171,6 +172,7 @@ async def api_client(session_factory) -> AsyncIterator[AsyncClient]:
     app.state.runtime.model_connectivity_tester = object()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate_api_client(client)
         yield client
     app.dependency_overrides.clear()
     if hasattr(app.state, "session_factory"):
@@ -186,6 +188,7 @@ async def db_backed_api_client(session_factory) -> AsyncIterator[AsyncClient]:
     app.state.runtime.mx_http_client = mx_http_client
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate_api_client(client)
         yield client
     app.dependency_overrides.clear()
     await mx_http_client.aclose()

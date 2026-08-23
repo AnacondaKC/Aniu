@@ -40,20 +40,13 @@ import { runKeys } from "@/features/runs/query-keys";
 function RunCardStatusIcon({ status }: { status: string }) {
   switch (status) {
     case "RUNNING":
-      return (
-        <LoaderCircleIcon
-          className="size-2.5 animate-spin text-emerald-600 dark:text-emerald-400"
-          aria-hidden
-        />
-      );
+      return <LoaderCircleIcon className="size-2.5 animate-spin text-emerald-600" aria-hidden />;
     case "FAILED":
       return <CircleAlertIcon className="text-destructive size-2.5" aria-hidden />;
     case "ABORTED":
       return <MinusIcon className="text-destructive size-2.5" aria-hidden />;
     case "COMPLETED":
-      return (
-        <CircleCheckIcon className="size-2.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
-      );
+      return <CircleCheckIcon className="size-2.5 text-emerald-600" aria-hidden />;
     default:
       return <CircleIcon className="text-destructive size-2.5" aria-hidden />;
   }
@@ -241,7 +234,7 @@ export function RunsPage() {
       {runsQuery.isError ? (
         <div
           role="alert"
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800"
         >
           正在显示上次成功加载的运行记录；后台刷新失败：{getErrorMessage(runsQuery.error)}
         </div>
@@ -250,7 +243,7 @@ export function RunsPage() {
         <div
           role={activeRunDiscoveryFailed ? "alert" : "status"}
           aria-live="polite"
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800"
         >
           {activeRunDiscoveryFailed
             ? "无法确认是否已有运行中的任务。为避免重复执行，手动运行暂时不可用；请重新加载页面后再试。"
@@ -344,7 +337,7 @@ export function RunsPage() {
                 key={runsPage}
                 ref={runListRef}
                 data-testid="runs-scroll-list"
-                className="flex min-w-0 flex-1 [scrollbar-width:thin] items-center gap-1.5 overflow-x-auto overflow-y-hidden p-1 pb-2"
+                className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden p-1 pb-2 [scrollbar-width:thin]"
               >
                 {runsPage > 0 ? (
                   <Button
@@ -390,15 +383,15 @@ export function RunsPage() {
                     >
                       <span
                         className={cn(
-                          "border-input dark:bg-input/30 flex h-[74px] flex-col rounded-md border bg-transparent px-3 py-2 shadow-xs transition-[background-color,border-color,box-shadow]",
+                          "border-input flex h-[74px] flex-col rounded-md border bg-transparent px-3 py-2 shadow-xs transition-[background-color,border-color,box-shadow]",
                           isRunning
                             ? cn(
-                                "border-sky-500/35 bg-sky-500/[0.06] group-hover:border-sky-500/55 group-hover:bg-sky-500/[0.1] dark:bg-sky-500/[0.08]",
+                                "border-sky-500/35 bg-sky-500/[0.06] group-hover:border-sky-500/55 group-hover:bg-sky-500/[0.1]",
                                 isSelected && "ring-[3px] ring-sky-500/20",
                               )
                             : isSelected
-                              ? "border-ring ring-ring/35 dark:bg-input/40 bg-transparent ring-[3px]"
-                              : "group-hover:border-ring/60 group-hover:bg-muted/20 dark:group-hover:bg-input/40",
+                              ? "border-ring ring-ring/35 bg-transparent ring-[3px]"
+                              : "group-hover:border-ring/60 group-hover:bg-muted/20",
                         )}
                       >
                         <span className="flex items-start justify-between gap-2">

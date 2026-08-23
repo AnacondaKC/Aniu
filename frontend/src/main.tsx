@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
 import { DirectionProvider } from "./components/direction-provider";
-import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { getAuthSession, subscribeAuthSession } from "./lib/auth-session";
@@ -31,14 +30,12 @@ subscribeAuthSession(() => {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <DirectionProvider>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-        <TooltipProvider>
-          <QueryClientProvider client={queryClient}>
-            <App />
-            <Toaster richColors />
-          </QueryClientProvider>
-        </TooltipProvider>
-      </ThemeProvider>
+      <TooltipProvider>
+        <QueryClientProvider client={queryClient}>
+          <App />
+          <Toaster richColors />
+        </QueryClientProvider>
+      </TooltipProvider>
     </DirectionProvider>
   </StrictMode>,
 );

@@ -49,11 +49,9 @@ async def require_authenticated(
     request: Request,
     auth: Annotated[AuthAppService, Depends(get_auth_app_service)],
     principal: Annotated[SessionPrincipal | None, Depends(get_optional_principal)],
-) -> SessionPrincipal | None:
-    """Require the local identity after first-run initialization."""
+) -> SessionPrincipal:
+    """Require an authenticated browser session for every protected route."""
 
-    if not await auth.identity_initialized():
-        return principal
     if principal is None:
         raise UnauthorizedError("authentication required")
     request.state.principal = principal
@@ -65,15 +63,13 @@ async def require_authenticated(
 async def require_stream_authenticated(
     request: Request,
     raw: Annotated[str | None, Security(_session_cookie)],
-) -> SessionPrincipal | None:
+) -> SessionPrincipal:
     """Authenticate SSE without retaining a request-scoped database session."""
 
     runtime = cast(AuthRuntimePort, request.app.state.runtime)
     async with runtime.require_session_factory()() as session:
         auth = runtime.auth_service(session)
         principal = await auth.resolve_session(raw)
-        if not await auth.identity_initialized():
-            return principal
         if principal is None:
             raise UnauthorizedError("authentication required")
         request.state.principal = principal

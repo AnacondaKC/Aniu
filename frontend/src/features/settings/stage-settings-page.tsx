@@ -624,7 +624,7 @@ export function StageSettingsPage() {
               aria-controls="stage-settings-panel"
               variant="ghost"
               className={cn(
-                "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent h-9 w-full justify-start gap-2 rounded-md px-3",
+                "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground h-9 w-full justify-start gap-2 rounded-md px-3",
                 isGlobal && "bg-sidebar-accent text-sidebar-accent-foreground",
               )}
               onClick={selectGlobal}
@@ -646,7 +646,7 @@ export function StageSettingsPage() {
                   aria-controls="stage-settings-panel"
                   variant="ghost"
                   className={cn(
-                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent h-9 w-full justify-start gap-2 rounded-md px-3",
+                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground h-9 w-full justify-start gap-2 rounded-md px-3",
                     selected && "bg-sidebar-accent text-sidebar-accent-foreground",
                   )}
                   onClick={() => selectStage(stage.stage_id)}

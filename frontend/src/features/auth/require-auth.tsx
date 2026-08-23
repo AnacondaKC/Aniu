@@ -2,12 +2,12 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/features/auth/auth-context";
 
-/** Gate protected app routes after the local identity has been initialized. */
+/** Gate protected app routes behind an authenticated browser session. */
 export function RequireAuth() {
   const auth = useAuth();
   const location = useLocation();
 
-  if (!auth.identityInitialized || auth.authenticated) {
+  if (auth.authenticated) {
     return <Outlet />;
   }
 

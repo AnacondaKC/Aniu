@@ -40,7 +40,7 @@ function ThinkingBadge({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex h-4 shrink-0 items-center rounded-sm border border-zinc-500/25 bg-zinc-500/[0.08] px-1.5 text-[9px] leading-none font-medium text-zinc-700 dark:text-zinc-300",
+        "inline-flex h-4 shrink-0 items-center rounded-sm border border-zinc-500/25 bg-zinc-500/[0.08] px-1.5 text-[9px] leading-none font-medium text-zinc-700",
         className,
       )}
     >
@@ -69,7 +69,7 @@ function SystemToolLabel({ className }: { className?: string }) {
 
 function SystemToolBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex h-4 shrink-0 items-center rounded-sm border border-yellow-500/25 bg-yellow-500/[0.08] px-1.5 text-[9px] leading-none font-medium text-yellow-700 dark:text-yellow-300">
+    <span className="inline-flex h-4 shrink-0 items-center rounded-sm border border-yellow-500/25 bg-yellow-500/[0.08] px-1.5 text-[9px] leading-none font-medium text-yellow-700">
       {label}
     </span>
   );
@@ -99,12 +99,12 @@ function ToolSourceBadge({ source }: { source: ProcessToolCall["source"] }) {
   const sourceLabel = TOOL_SOURCE_LABELS[source];
   const sourceClass =
     source === "aggregate"
-      ? "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700 dark:text-emerald-300"
+      ? "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700 "
       : source === "mx"
-        ? "border-violet-500/25 bg-violet-500/[0.08] text-violet-700 dark:text-violet-300"
+        ? "border-violet-500/25 bg-violet-500/[0.08] text-violet-700 "
         : source === "public"
-          ? "border-orange-500/25 bg-orange-500/[0.08] text-orange-700 dark:text-orange-300"
-          : "border-slate-500/25 bg-slate-500/[0.08] text-slate-700 dark:text-slate-300";
+          ? "border-orange-500/25 bg-orange-500/[0.08] text-orange-700 "
+          : "border-slate-500/25 bg-slate-500/[0.08] text-slate-700 ";
 
   return (
     <span
@@ -195,10 +195,10 @@ function AgentToolRow({ call }: { call: ProcessToolCall }) {
             isFailure
               ? "text-destructive"
               : isWarning
-                ? "text-yellow-700 dark:text-yellow-300"
+                ? "text-yellow-700"
                 : isRunning
                   ? "text-muted-foreground"
-                  : "text-emerald-700 dark:text-emerald-300",
+                  : "text-emerald-700",
           )}
           title={`工具结果：${result}`}
         >
@@ -267,10 +267,10 @@ function MemoryToolRow({ call }: { call: ProcessToolCall }) {
             isFailure
               ? "text-destructive"
               : isWarning
-                ? "text-yellow-700 dark:text-yellow-300"
+                ? "text-yellow-700"
                 : isRunning
                   ? "text-muted-foreground"
-                  : "text-emerald-700 dark:text-emerald-300",
+                  : "text-emerald-700",
           )}
         >
           <ResultIcon className={cn("size-3", isRunning && "animate-spin")} aria-hidden />
@@ -351,9 +351,7 @@ function ThinkingRow({ text, running = false }: { text: string; running?: boolea
         <span className={cn(processRailExpandedContentClass, "max-h-[32rem] overflow-auto")}>
           {body || "…"}
           {running ? (
-            <span className="animate-caret-blink ms-0.5 inline-block text-sky-600 dark:text-sky-400">
-              ▌
-            </span>
+            <span className="animate-caret-blink ms-0.5 inline-block text-sky-600">▌</span>
           ) : null}
         </span>
       ) : (

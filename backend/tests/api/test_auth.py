@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from dataclasses import replace
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -58,16 +59,24 @@ async def api_client(session_factory) -> AsyncIterator[AsyncClient]:
 
 
 @pytest.mark.asyncio
-async def test_open_mode_until_setup(api_client: AsyncClient) -> None:
+async def test_protected_routes_require_auth_before_setup(
+    api_client: AsyncClient,
+) -> None:
     session = await api_client.get("/api/aniu/auth/session")
     assert session.status_code == 200
     body = session.json()
     assert body["authenticated"] is False
     assert body["identity_initialized"] is False
 
-    # Protected routes remain usable before setup.
     settings = await api_client.get("/api/aniu/settings")
-    assert settings.status_code == 200
+    assert settings.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_auth_endpoints_reject_short_tokens(api_client: AsyncClient) -> None:
+    for endpoint in ("/api/aniu/auth/setup", "/api/aniu/auth/login"):
+        response = await api_client.post(endpoint, json={"token": "short"})
+        assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -77,7 +86,7 @@ async def test_setup_rejects_non_loopback(api_client: AsyncClient) -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as remote:
         response = await remote.post(
             "/api/aniu/auth/setup",
-            json={"username": "aniu", "password": "password123"},
+            json={"token": "correct-token"},
         )
     assert response.status_code == 403
 
@@ -89,7 +98,7 @@ async def test_setup_login_and_lockdown(
 ) -> None:
     setup = await api_client.post(
         "/api/aniu/auth/setup",
-        json={"username": "aniu", "password": "password123"},
+        json={"token": "correct-token"},
     )
     assert setup.status_code == 201
     assert setup.json()["authenticated"] is True
@@ -97,12 +106,19 @@ async def test_setup_login_and_lockdown(
     assert "role" not in setup.json()
     assert "permissions" not in setup.json()
     assert setup.json()["csrf_token"]
-    csrf = setup.json()["csrf_token"]
+
+    login = await api_client.post(
+        "/api/aniu/auth/login",
+        json={"token": "correct-token"},
+    )
+    assert login.status_code == 200
+    assert login.json()["authenticated"] is True
+    csrf = login.json()["csrf_token"]
 
     # A deployment can initialize exactly one local identity.
     duplicate = await api_client.post(
         "/api/aniu/auth/setup",
-        json={"username": "other", "password": "password123"},
+        json={"token": "another-token"},
     )
     assert duplicate.status_code == 400
 
@@ -181,20 +197,20 @@ async def test_http_login_rate_limit_is_process_scoped(
 ) -> None:
     setup = await api_client.post(
         "/api/aniu/auth/setup",
-        json={"username": "aniu", "password": "password123"},
+        json={"token": "correct-token"},
     )
     assert setup.status_code == 201
 
     for _ in range(5):
         failed = await api_client.post(
             "/api/aniu/auth/login",
-            json={"username": "aniu", "password": "wrong-password"},
+            json={"token": "wrong-token"},
         )
         assert failed.status_code == 401
 
     locked = await api_client.post(
         "/api/aniu/auth/login",
-        json={"username": "aniu", "password": "wrong-password"},
+        json={"token": "wrong-token"},
     )
     assert locked.status_code == 401
     assert "too many failed login attempts" in locked.json()["error"]["message"]
@@ -207,13 +223,13 @@ async def test_failed_login_before_setup_does_not_block_atomic_setup(
     for _ in range(5):
         failed = await api_client.post(
             "/api/aniu/auth/login",
-            json={"username": "aniu", "password": "wrong-password"},
+            json={"token": "wrong-token"},
         )
         assert failed.status_code == 401
 
     setup = await api_client.post(
         "/api/aniu/auth/setup",
-        json={"username": "aniu", "password": "password123"},
+        json={"token": "correct-token"},
     )
 
     assert setup.status_code == 201
@@ -228,7 +244,7 @@ async def test_frequent_session_probes_do_not_write_session(
 ) -> None:
     setup = await api_client.post(
         "/api/aniu/auth/setup",
-        json={"username": "aniu", "password": "password123"},
+        json={"token": "correct-token"},
     )
     csrf = setup.json()["csrf_token"]
     async with session_factory() as session:
@@ -246,6 +262,63 @@ async def test_frequent_session_probes_do_not_write_session(
         after = await session.scalar(select(AuthSessionModel))
         assert after is not None
         assert (after.last_seen_at, after.expires_at) == before_times
+
+
+@pytest.mark.asyncio
+async def test_configured_token_can_login_without_local_identity(
+    api_client: AsyncClient,
+) -> None:
+    runtime = app.state.runtime
+    original_config = runtime.config
+    runtime.config = replace(original_config, auth_token="configured-token")
+    try:
+        session = await api_client.get("/api/aniu/auth/session")
+        assert session.status_code == 200
+        assert session.json()["identity_initialized"] is True
+
+        wrong = await api_client.post(
+            "/api/aniu/auth/login",
+            json={"token": "wrong-token"},
+        )
+        assert wrong.status_code == 401
+
+        login = await api_client.post(
+            "/api/aniu/auth/login",
+            json={"token": "configured-token"},
+        )
+        assert login.status_code == 200
+        assert login.json()["authenticated"] is True
+        assert (await api_client.get("/api/aniu/settings")).status_code == 200
+    finally:
+        runtime.config = original_config
+
+
+@pytest.mark.asyncio
+async def test_configured_token_rotation_revokes_existing_sessions(
+    api_client: AsyncClient,
+) -> None:
+    runtime = app.state.runtime
+    original_config = runtime.config
+    runtime.config = replace(original_config, auth_token="configured-token")
+    try:
+        login = await api_client.post(
+            "/api/aniu/auth/login",
+            json={"token": "configured-token"},
+        )
+        assert login.status_code == 200
+        assert (await api_client.get("/api/aniu/settings")).status_code == 200
+
+        runtime.config = replace(original_config, auth_token="rotated-token")
+        assert (await api_client.get("/api/aniu/settings")).status_code == 401
+
+        relogin = await api_client.post(
+            "/api/aniu/auth/login",
+            json={"token": "rotated-token"},
+        )
+        assert relogin.status_code == 200
+        assert (await api_client.get("/api/aniu/settings")).status_code == 200
+    finally:
+        runtime.config = original_config
 
 
 @pytest.mark.asyncio

@@ -68,7 +68,7 @@ describe("ModelSettingsCard", () => {
     await user.click(screen.getByRole("button", { name: "添加并保存" }));
 
     await waitFor(() => expect(onSaveChannel).toHaveBeenCalledOnce());
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("keeps the configured key when clearing fails", async () => {

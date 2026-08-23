@@ -84,9 +84,9 @@ const NESTED_LIST_ITEM_CLASS =
   "border-border/40 bg-muted/20 flex items-center gap-3 rounded-md border px-4 py-3";
 
 const operationBadgeClass: Record<string, string> = {
-  read: "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
-  create: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  update: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  read: "border-blue-500/25 bg-blue-500/10 text-blue-700",
+  create: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700",
+  update: "border-amber-500/25 bg-amber-500/10 text-amber-700",
   delete: "border-destructive/25 bg-destructive/10 text-destructive",
 };
 
@@ -97,11 +97,11 @@ const dreamStatusMeta: Record<MemoryDream["status"], { label: string; className:
   },
   running: {
     label: "运行中",
-    className: "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    className: "border-blue-500/25 bg-blue-500/10 text-blue-700",
   },
   completed: {
     label: "已完成",
-    className: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    className: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700",
   },
   failed: {
     label: "执行失败",
@@ -740,7 +740,8 @@ export function MemoryOverviewPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>删除梦境记录</AlertDialogTitle>
             <AlertDialogDescription>
-              确定删除梦境记录 #{deletingDream?.task_id} 吗？删除后无法恢复，关联的记忆活动日志会保留。
+              确定删除梦境记录 #{deletingDream?.task_id}{" "}
+              吗？删除后无法恢复，关联的记忆活动日志会保留。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -817,7 +818,7 @@ export function MemoryOverviewPage() {
       {refreshError ? (
         <div
           role="alert"
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800"
         >
           正在显示上次成功加载的数据；后台刷新失败：{getErrorMessage(refreshError)}
         </div>

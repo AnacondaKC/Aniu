@@ -109,11 +109,12 @@ describe("OpenAPI API client behavior", () => {
     );
     globalThis.fetch = fetchMock;
 
-    await expect(login("aniu", "secret")).resolves.toMatchObject({
+    await expect(login("secret-token")).resolves.toMatchObject({
       authenticated: true,
       username: "aniu",
       csrfToken: "next-token",
     });
+    expect(await mockedRequest(fetchMock).json()).toEqual({ token: "secret-token" });
   });
 
   it("clears the session on a 401 response", async () => {
@@ -127,7 +128,7 @@ describe("OpenAPI API client behavior", () => {
       .fn()
       .mockResolvedValue(Response.json({ detail: "session expired" }, { status: 401 }));
 
-    await expect(login("aniu", "secret")).rejects.toMatchObject({
+    await expect(login("secret-token")).rejects.toMatchObject({
       name: "ApiError",
       status: 401,
       message: "session expired",

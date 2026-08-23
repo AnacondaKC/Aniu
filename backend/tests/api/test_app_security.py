@@ -21,8 +21,8 @@ def test_audit_event_prefers_specific_path_prefix() -> None:
     assert _audit_event("PUT", "/api/aniu/settings") == "settings.update"
 
 
-def test_lan_config_requires_explicit_allowed_hosts() -> None:
-    with pytest.raises(ValueError, match="requires explicit ANIU_ALLOWED_HOSTS"):
+def test_lan_config_requires_non_loopback_allowed_host() -> None:
+    with pytest.raises(ValueError, match="requires a non-loopback allowed host"):
         RuntimeConfig(lan_mode=True)
 
 

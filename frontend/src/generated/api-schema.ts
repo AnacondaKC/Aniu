@@ -832,10 +832,8 @@ export interface components {
         };
         /** LoginRequest */
         LoginRequest: {
-            /** Password */
-            password: string;
-            /** Username */
-            username: string;
+            /** Token */
+            token: string;
         };
         /** MarketDetailsResponse */
         MarketDetailsResponse: {
@@ -1458,10 +1456,8 @@ export interface components {
         };
         /** SetupIdentityRequest */
         SetupIdentityRequest: {
-            /** Password */
-            password: string;
-            /** Username */
-            username: string;
+            /** Token */
+            token: string;
         };
         /** StageSettingsRequest */
         StageSettingsRequest: {

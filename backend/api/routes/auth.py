@@ -16,6 +16,7 @@ from backend.business.auth.service import (
     AuthAppService,
     SessionPrincipal,
 )
+from backend.business.auth.token_policy import TOKEN_MAX_LENGTH, TOKEN_MIN_LENGTH
 
 router = APIRouter(
     prefix="/api/aniu/auth",
@@ -25,17 +26,15 @@ router = APIRouter(
 
 
 class SetupIdentityRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    username: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=8, max_length=128)
+    token: str = Field(min_length=TOKEN_MIN_LENGTH, max_length=TOKEN_MAX_LENGTH)
 
 
 class LoginRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    username: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=1, max_length=128)
+    token: str = Field(min_length=TOKEN_MIN_LENGTH, max_length=TOKEN_MAX_LENGTH)
 
 
 class SessionResponse(BaseModel):
@@ -47,16 +46,24 @@ class SessionResponse(BaseModel):
     csrf_token: str | None = None
 
 
-def _set_session_cookie(response: Response, raw_token: str) -> None:
+def _set_session_cookie(response: Response, raw_token: str, *, secure: bool) -> None:
     response.set_cookie(
         key=SESSION_COOKIE,
         value=raw_token,
         httponly=True,
         samesite="strict",
-        secure=False,
+        secure=secure,
         max_age=int(SESSION_TTL.total_seconds()),
         path="/",
     )
+
+
+def _is_loopback(request: Request) -> bool:
+    client_host = request.client.host if request.client is not None else ""
+    try:
+        return ipaddress.ip_address(client_host).is_loopback
+    except ValueError:
+        return client_host in {"localhost", "testclient"}
 
 
 @router.get("/session", response_model=SessionResponse)
@@ -89,23 +96,22 @@ async def setup_identity(
     response: Response,
     auth: Annotated[AuthAppService, Depends(get_auth_app_service)],
 ) -> SessionResponse:
-    client_host = request.client.host if request.client is not None else ""
-    try:
-        is_loopback = ipaddress.ip_address(client_host).is_loopback
-    except ValueError:
-        is_loopback = client_host in {"localhost", "testclient"}
-    if not is_loopback:
+    if not _is_loopback(request):
         from backend.business.auth.service import ForbiddenError
 
         raise ForbiddenError("identity setup is only allowed on loopback")
-    login = await auth.setup(payload.username, payload.password)
-    request.state.principal = login.principal
-    _set_session_cookie(response, login.raw_session_token)
+    login_result = await auth.setup(payload.token)
+    request.state.principal = login_result.principal
+    _set_session_cookie(
+        response,
+        login_result.raw_session_token,
+        secure=request.url.scheme == "https",
+    )
     return SessionResponse(
         authenticated=True,
         identity_initialized=True,
-        username=login.principal.identity.username,
-        csrf_token=login.raw_csrf_token,
+        username=login_result.principal.identity.username,
+        csrf_token=login_result.raw_csrf_token,
     )
 
 
@@ -116,9 +122,13 @@ async def login(
     response: Response,
     auth: Annotated[AuthAppService, Depends(get_auth_app_service)],
 ) -> SessionResponse:
-    login_result = await auth.login(payload.username, payload.password)
+    login_result = await auth.login(payload.token)
     request.state.principal = login_result.principal
-    _set_session_cookie(response, login_result.raw_session_token)
+    _set_session_cookie(
+        response,
+        login_result.raw_session_token,
+        secure=request.url.scheme == "https",
+    )
     return SessionResponse(
         authenticated=True,
         identity_initialized=True,

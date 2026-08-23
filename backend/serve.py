@@ -10,7 +10,11 @@ from typing import Any
 
 import uvicorn
 
-from backend.bootstrap.runtime_config import env_flag
+from backend.bootstrap.runtime_config import (
+    default_lan_allowed_hosts,
+    env_flag,
+    normalize_allowed_hosts,
+)
 from backend.infra.observability import LoggingSettings, build_logging_config
 from backend.infra.runtime_paths import PROJECT_ROOT
 
@@ -40,25 +44,29 @@ def _non_negative_float(value: str) -> float:
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser for serving the app."""
 
+    lan_default = env_flag("ANIU_LAN", default=False)
     parser = argparse.ArgumentParser(
-        description="Serve Aniu for localhost or LAN access.",
+        description="Serve Aniu for LAN access or localhost-only access.",
     )
     parser.add_argument(
         "--host",
-        default=os.getenv("ANIU_HOST", "127.0.0.1"),
-        help="Bind host. Defaults to ANIU_HOST or 127.0.0.1 (localhost only).",
+        default=os.getenv("ANIU_HOST"),
+        help=(
+            "Bind host. Defaults to ANIU_HOST or 127.0.0.1; use --lan to "
+            "default to 0.0.0.0."
+        ),
     )
     parser.add_argument(
         "--lan",
-        action="store_true",
-        default=env_flag("ANIU_LAN"),
-        help="Explicitly enable LAN mode and its mandatory security checks.",
+        action=argparse.BooleanOptionalAction,
+        default=lan_default,
+        help="Enable LAN mode and its exact TrustedHost allowlist (default: disabled).",
     )
     parser.add_argument(
         "--allowed-host",
         action="append",
         default=[],
-        help="Allowed HTTP Host in LAN mode. Repeat for multiple hosts.",
+        help="Allowed HTTP Host in LAN mode. Repeat or use comma-separated values.",
     )
     parser.add_argument(
         "--port",
@@ -116,15 +124,33 @@ def main() -> None:
 
     parser = build_parser()
     args = parser.parse_args()
-    non_loopback = args.host not in {"127.0.0.1", "localhost", "::1"}
-    if non_loopback and not args.lan:
-        parser.error("non-loopback --host requires explicit --lan")
+    if args.host is None:
+        args.host = "0.0.0.0" if args.lan else "127.0.0.1"
+
     if args.lan:
-        if not args.allowed_host and not os.getenv("ANIU_ALLOWED_HOSTS"):
-            parser.error("--lan requires --allowed-host or ANIU_ALLOWED_HOSTS")
         os.environ["ANIU_LAN"] = "1"
         if args.allowed_host:
-            os.environ["ANIU_ALLOWED_HOSTS"] = ",".join(args.allowed_host)
+            supplied_hosts = tuple(
+                host for item in args.allowed_host for host in item.split(",")
+            )
+            try:
+                allowed_hosts = normalize_allowed_hosts(supplied_hosts)
+            except ValueError as exc:
+                parser.error(str(exc))
+            os.environ["ANIU_ALLOWED_HOSTS"] = ",".join(allowed_hosts)
+        elif not os.getenv("ANIU_ALLOWED_HOSTS"):
+            discovered_hosts = default_lan_allowed_hosts()
+            if not any(
+                host not in {"localhost", "127.0.0.1", "::1", "test"}
+                for host in discovered_hosts
+            ):
+                parser.error(
+                    "LAN mode requires --allowed-host or ANIU_ALLOWED_HOSTS when no "
+                    "private IPv4 address is available"
+                )
+            os.environ["ANIU_ALLOWED_HOSTS"] = ",".join(discovered_hosts)
+    else:
+        os.environ["ANIU_LAN"] = "0"
     if args.data_dir:
         os.environ["ANIU_DATA_DIR"] = str(Path(args.data_dir).expanduser().resolve())
 

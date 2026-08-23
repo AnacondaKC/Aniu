@@ -67,6 +67,7 @@ class AuthSessionRepository:
         model = AuthSessionModel(
             token_hash=session.token_hash,
             csrf_token_hash=session.csrf_token_hash,
+            credential_fingerprint=session.credential_fingerprint,
             expires_at=session.expires_at.isoformat(),
             last_seen_at=session.last_seen_at.isoformat(),
             revoked_at=None,
@@ -109,6 +110,7 @@ class AuthSessionRepository:
             session_id=model.id,
             token_hash=model.token_hash,
             csrf_token_hash=model.csrf_token_hash,
+            credential_fingerprint=model.credential_fingerprint,
             expires_at=_dt(model.expires_at) or datetime.now(tz=UTC),
             last_seen_at=_dt(model.last_seen_at) or datetime.now(tz=UTC),
             revoked_at=_dt(model.revoked_at),

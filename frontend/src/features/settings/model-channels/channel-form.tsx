@@ -106,7 +106,7 @@ export function ChannelForm({
   return (
     <div className="flex flex-col gap-5">
       {draft.status === "conflict" ? (
-        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           服务端渠道已更新。请先重新加载服务端版本，或在解决冲突前保留本地草稿（不可用旧 revision
           直接保存）。
         </p>

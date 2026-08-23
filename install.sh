@@ -31,7 +31,7 @@ Examples:
   ./install.sh
   ./install.sh docker --image ghcr.io/OWNER/IMAGE:latest
   ./install.sh source --start
-  ANIU_SYSTEMD_ALLOWED_HOST=example.com ./install.sh source --systemd
+  ANIU_SYSTEMD_LAN=1 ANIU_SYSTEMD_ALLOWED_HOSTS=192.168.1.20 ./install.sh source --systemd
   ./install.sh clean
 EOF
 }
@@ -57,6 +57,37 @@ run_privileged() {
 ensure_local_dir() {
   mkdir -p "$LOCAL_DIR"
   chmod 700 "$ROOT_DIR/.aniu" "$LOCAL_DIR"
+}
+
+detect_lan_ipv4() {
+  local detected=""
+  if command -v python3 >/dev/null 2>&1; then
+    detected="$(python3 - <<'PY'
+import ipaddress
+import socket
+
+try:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as connection:
+        connection.connect(("8.8.8.8", 80))
+        address = ipaddress.IPv4Address(connection.getsockname()[0])
+except OSError:
+    raise SystemExit
+
+if not (
+    address.is_loopback
+    or address.is_unspecified
+    or address.is_multicast
+    or address.is_global
+):
+    print(address)
+PY
+)"
+  fi
+  if [ -z "$detected" ] && command -v hostname >/dev/null 2>&1; then
+    detected="$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)/) {print $i; exit}}' || true)"
+  fi
+  [ -n "$detected" ] || return 1
+  printf '%s' "$detected"
 }
 
 ensure_env_file() {
@@ -134,7 +165,7 @@ install_docker() {
     docker compose --env-file "$ENV_FILE" up -d
   fi
 
-  printf 'Aniu is running at http://127.0.0.1:%s\n' "$(port_from_env)"
+  printf 'Aniu is running locally at http://127.0.0.1:%s\n' "$(port_from_env)"
 }
 
 install_frontend() {
@@ -145,16 +176,32 @@ install_frontend() {
 
 install_systemd() {
   require_command systemctl
-  require_command systemd-escape
+  ensure_env_file
   [ "$START_SOURCE" -eq 0 ] || die "Use either --start or --systemd, not both"
 
   local service_name="${ANIU_SYSTEMD_SERVICE:-aniu.service}"
   local service_user="${ANIU_SYSTEMD_USER:-${SUDO_USER:-$(id -un)}}"
   local port="${ANIU_SYSTEMD_PORT:-8000}"
-  local allowed_host="${ANIU_SYSTEMD_ALLOWED_HOST:-localhost}"
-  local cors_origins="${ANIU_SYSTEMD_CORS_ORIGINS:-http://localhost:$port}"
+  local lan_mode="${ANIU_SYSTEMD_LAN:-0}"
+  local allowed_hosts="${ANIU_SYSTEMD_ALLOWED_HOSTS:-localhost,127.0.0.1,localhost.localdomain}"
+  local cors_origins="${ANIU_SYSTEMD_CORS_ORIGINS:-http://localhost:$port,http://127.0.0.1:$port}"
   local log_level="${ANIU_SYSTEMD_LOG_LEVEL:-info}"
-  local escaped_root escaped_venv escaped_python escaped_frontend unit_file
+  local bind_host="127.0.0.1"
+  local lan_flag="--no-lan"
+  local unit_file
+
+  case "$lan_mode" in
+    1|true|yes|on) lan_mode=1 ;;
+    0|false|no|off|"") lan_mode=0 ;;
+    *) die "ANIU_SYSTEMD_LAN must be a boolean" ;;
+  esac
+  if [ "$lan_mode" -eq 1 ]; then
+    local lan_host
+    lan_host="$(detect_lan_ipv4)" || die "Could not determine a private LAN IPv4 address"
+    allowed_hosts="${ANIU_SYSTEMD_ALLOWED_HOSTS:-localhost,127.0.0.1,$lan_host}"
+    bind_host="${ANIU_SYSTEMD_HOST:-0.0.0.0}"
+    lan_flag="--lan"
+  fi
 
   case "$service_name" in
     ""|*[!A-Za-z0-9_.@-]*) die "ANIU_SYSTEMD_SERVICE contains invalid characters" ;;
@@ -169,17 +216,16 @@ install_systemd() {
   if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
     die "ANIU_SYSTEMD_PORT must be between 1 and 65535"
   fi
-  case "$allowed_host" in
-    ""|*[!A-Za-z0-9.,:_-]*) die "ANIU_SYSTEMD_ALLOWED_HOST contains invalid characters" ;;
+  case "$allowed_hosts" in
+    ""|*[!A-Za-z0-9.,:_-]*) die "ANIU_SYSTEMD_ALLOWED_HOSTS contains invalid characters" ;;
   esac
   case "$cors_origins" in
     *[[:space:]]*) die "ANIU_SYSTEMD_CORS_ORIGINS cannot contain spaces" ;;
   esac
+  case "$ROOT_DIR:$VENV_DIR:$ENV_FILE" in
+    *[!A-Za-z0-9_./:-]*) die "systemd installation paths contain unsupported characters" ;;
+  esac
 
-  escaped_root="$(systemd-escape --path "$ROOT_DIR")"
-  escaped_venv="$(systemd-escape --path "$VENV_DIR")"
-  escaped_python="$(systemd-escape --path "$VENV_DIR/bin/python")"
-  escaped_frontend="$(systemd-escape --path "$ROOT_DIR/frontend/dist")"
   unit_file="$(mktemp)"
   cat > "$unit_file" <<EOF
 [Unit]
@@ -190,19 +236,21 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=$service_user
-WorkingDirectory=$escaped_root
-Environment=PATH=$escaped_venv/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=$ROOT_DIR
+EnvironmentFile=$ENV_FILE
+Environment=PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPYCACHEPREFIX=/var/lib/aniu/pycache
 Environment=ANIU_DATA_DIR=/var/lib/aniu
-Environment=ANIU_FRONTEND_DIST=$escaped_frontend
+Environment=ANIU_FRONTEND_DIST=$ROOT_DIR/frontend/dist
 Environment=ANIU_SERVE_FRONTEND=1
 Environment=ANIU_ENABLE_SCHEDULER=1
-Environment=ANIU_ALLOWED_HOSTS=$allowed_host
+Environment=ANIU_LAN=$lan_mode
+Environment=ANIU_ALLOWED_HOSTS=$allowed_hosts
 Environment=ANIU_CORS_ORIGINS=$cors_origins
 Environment=ANIU_LOG_LEVEL=$log_level
 StateDirectory=aniu
-ExecStart=$escaped_python -m backend.serve --host 0.0.0.0 --port $port --lan --allowed-host $allowed_host
+ExecStart=$VENV_DIR/bin/python -m backend.serve --host $bind_host --port $port $lan_flag --allowed-host $allowed_hosts
 Restart=always
 RestartSec=5
 NoNewPrivileges=true

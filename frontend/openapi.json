@@ -677,22 +677,15 @@
       "LoginRequest": {
         "additionalProperties": false,
         "properties": {
-          "password": {
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Password",
-            "type": "string"
-          },
-          "username": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Username",
+          "token": {
+            "maxLength": 4096,
+            "minLength": 8,
+            "title": "Token",
             "type": "string"
           }
         },
         "required": [
-          "username",
-          "password"
+          "token"
         ],
         "title": "LoginRequest",
         "type": "object"
@@ -2459,22 +2452,15 @@
       "SetupIdentityRequest": {
         "additionalProperties": false,
         "properties": {
-          "password": {
-            "maxLength": 128,
+          "token": {
+            "maxLength": 4096,
             "minLength": 8,
-            "title": "Password",
-            "type": "string"
-          },
-          "username": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Username",
+            "title": "Token",
             "type": "string"
           }
         },
         "required": [
-          "username",
-          "password"
+          "token"
         ],
         "title": "SetupIdentityRequest",
         "type": "object"

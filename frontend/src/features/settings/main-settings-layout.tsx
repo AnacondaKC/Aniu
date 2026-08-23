@@ -37,7 +37,7 @@ export function MainSettingsLayout() {
                   aria-controls="main-settings-panel"
                   variant="ghost"
                   className={cn(
-                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent h-9 w-full justify-start gap-2 rounded-md px-3",
+                    "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground h-9 w-full justify-start gap-2 rounded-md px-3",
                     active && "bg-sidebar-accent text-sidebar-accent-foreground",
                   )}
                   onClick={() => setActiveTab(item.id)}

@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 
 from backend.api.sse import StreamHub
 from backend.main import app
+from backend.tests.api.conftest import authenticate_api_client
 
 
 @pytest.fixture
@@ -34,6 +35,7 @@ async def api_client(session_factory) -> AsyncIterator[AsyncClient]:
     )()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate_api_client(client)
         yield client
     app.dependency_overrides.clear()
 
