@@ -124,6 +124,7 @@ function isMarketSessionBlocked(call: ProcessToolCall) {
 
 function agentToolResult(call: ProcessToolCall) {
   if (call.status === "completed") return "完成";
+  if (call.status === "stopped") return "已停止";
   if (isMarketSessionBlocked(call)) return "非交易时间";
   if (call.status === "blocked") return "已阻止";
   if (call.status === "failed") return "失败";
@@ -156,12 +157,13 @@ function AgentToolRow({ call }: { call: ProcessToolCall }) {
   const result = agentToolResult(call);
   const isFailure = call.status === "failed";
   const isWarning = call.status === "blocked";
+  const isStopped = call.status === "stopped";
   const isRunning = isRunningStatus(call.status);
   const modelContentCharacters = formatModelContentCharacters(call);
   const returnDuration = formatToolReturnDuration(call);
   const ResultIcon = isRunning
     ? Loader2Icon
-    : isFailure || isWarning
+    : isFailure || isWarning || isStopped
       ? CircleAlertIcon
       : CheckCircle2Icon;
 
@@ -196,7 +198,7 @@ function AgentToolRow({ call }: { call: ProcessToolCall }) {
               ? "text-destructive"
               : isWarning
                 ? "text-yellow-700"
-                : isRunning
+                : isRunning || isStopped
                   ? "text-muted-foreground"
                   : "text-emerald-700",
           )}
@@ -228,10 +230,11 @@ function MemoryToolRow({ call }: { call: ProcessToolCall }) {
   const result = agentToolResult(call);
   const isFailure = call.status === "failed";
   const isWarning = call.status === "blocked";
+  const isStopped = call.status === "stopped";
   const isRunning = isRunningStatus(call.status);
   const ResultIcon = isRunning
     ? Loader2Icon
-    : isFailure || isWarning
+    : isFailure || isWarning || isStopped
       ? CircleAlertIcon
       : CheckCircle2Icon;
   const operationValue = call.queryParameters?.match(/operation=([^ ·]+)/)?.[1];
@@ -268,7 +271,7 @@ function MemoryToolRow({ call }: { call: ProcessToolCall }) {
               ? "text-destructive"
               : isWarning
                 ? "text-yellow-700"
-                : isRunning
+                : isRunning || isStopped
                   ? "text-muted-foreground"
                   : "text-emerald-700",
           )}
@@ -395,7 +398,11 @@ function TimelineEventRow({ event, live }: { event: ProcessTimelineEvent; live: 
     return <ThinkingRow text={event.text} running={live && isRunningStatus(event.status)} />;
   }
   if (event.kind === "tool") {
-    return <ToolRow call={event.call} />;
+    const call =
+      live || !isRunningStatus(event.call.status)
+        ? event.call
+        : { ...event.call, status: "stopped" };
+    return <ToolRow call={call} />;
   }
   return <ExtraRow event={event} />;
 }
@@ -452,13 +459,15 @@ function ProcessRail({ model }: { model: ProcessRailModel }) {
 export function StageEvents({
   stage,
   liveStepDeltaByStepId = {},
+  isLive = stage.status === "running",
 }: {
   stage: TraceStage;
   liveStepDeltaByStepId?: Record<string, string>;
+  isLive?: boolean;
 }) {
   const model = useMemo(
-    () => buildProcessRailModel(stage, liveStepDeltaByStepId),
-    [stage, liveStepDeltaByStepId],
+    () => buildProcessRailModel(stage, liveStepDeltaByStepId, isLive),
+    [stage, liveStepDeltaByStepId, isLive],
   );
 
   const hasProcessOrInputs = model.hasProcess;

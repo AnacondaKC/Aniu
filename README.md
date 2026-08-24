@@ -234,7 +234,7 @@ Release 镜像会在启动时自动修复 <code>./data</code> 的挂载根目录
 使用指定 Release 镜像部署：
 
 ```bash
-export ANIU_IMAGE=ghcr.io/anacondakc/aniu:v1.0.2
+export ANIU_IMAGE=ghcr.io/anacondakc/aniu:v1.0.3
 docker pull "$ANIU_IMAGE"
 docker compose --env-file .aniu/local/.env up -d --no-build --force-recreate
 ```

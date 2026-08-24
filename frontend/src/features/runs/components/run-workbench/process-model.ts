@@ -88,6 +88,7 @@ function isTerminalStatus(step: TraceStep) {
 export function buildProcessRailModel(
   stage: TraceStage,
   liveStepDeltaByStepId: Record<string, string>,
+  stageIsLive = stage.status === "running",
 ): ProcessRailModel {
   const steps = stage.steps ?? [];
   const thinkingSteps = steps.filter((step) => step.type === "thinking");
@@ -118,13 +119,12 @@ export function buildProcessRailModel(
     return [];
   });
 
-  const stageRunning = stage.status === "running";
   const reportDone = results.length > 0 && results.every((step) => !isRunningStatus(step.status));
-  const isLive = stageRunning && !reportDone;
+  const isLive = stage.status === "running" && stageIsLive && !reportDone;
   const toolRunning = timeline.some(
     (event) => event.kind === "tool" && isRunningStatus(event.call.status),
   );
-  const processActive = thinkingRunning || toolRunning;
+  const processActive = isLive && (thinkingRunning || toolRunning);
   const visibleResults = processActive
     ? []
     : results.filter((step) => {

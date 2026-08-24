@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -32,6 +33,32 @@ RANKINGS = (
     ("net_inflow", StockRankingRequest(sort="net_inflow", order="desc", limit=5)),
     ("net_outflow", StockRankingRequest(sort="net_inflow", order="asc", limit=5)),
 )
+
+_MARKET_DATE_RE = re.compile(r"^\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s]|$)")
+
+
+def _market_trading_day(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    match = _MARKET_DATE_RE.match(value)
+    if match is None:
+        return None
+    try:
+        return (
+            datetime(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            .date()
+            .isoformat()
+        )
+    except ValueError:
+        return None
+
+
+def _latest_trading_day_bars(bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    dated_bars = [(bar, _market_trading_day(bar.get("time"))) for bar in bars]
+    latest_day = max((day for _, day in dated_bars if day is not None), default=None)
+    if latest_day is None:
+        return bars
+    return [bar for bar, day in dated_bars if day == latest_day]
 
 
 class PublicMarketOverviewQuery:
@@ -321,6 +348,13 @@ class PublicMarketOverviewQuery:
             bars = data.get("bars") if isinstance(data, dict) else None
             if not isinstance(bars, list):
                 continue
+            valid_bars = [
+                bar
+                for bar in bars
+                if isinstance(bar, dict)
+                and isinstance(bar.get("time"), str)
+                and isinstance(bar.get("close"), (int, float))
+            ]
             points = [
                 {
                     "time": bar.get("time"),
@@ -330,10 +364,7 @@ class PublicMarketOverviewQuery:
                     if isinstance(bar.get("amount"), (int, float))
                     else None,
                 }
-                for bar in bars
-                if isinstance(bar, dict)
-                and isinstance(bar.get("time"), str)
-                and isinstance(bar.get("close"), (int, float))
+                for bar in _latest_trading_day_bars(valid_bars)
             ]
             trends.append(
                 {

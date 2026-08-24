@@ -268,6 +268,7 @@ class RunJobRepository:
         claim_token: str,
         error_code: str | None = None,
         error_message: str | None = None,
+        require_leased: bool = False,
         now: datetime | None = None,
     ) -> RunJob | None:
         if status in ACTIVE_JOB_STATUSES:
@@ -277,15 +278,18 @@ class RunJobRepository:
         preview = None
         if error_message:
             preview = error_message[:500]
+        source_statuses = (
+            (RunJobStatus.LEASED.value,)
+            if require_leased
+            else (
+                RunJobStatus.LEASED.value,
+                RunJobStatus.CANCEL_REQUESTED.value,
+            )
+        )
         ownership_filters = [
             RunJobModel.worker_id == worker_id,
             RunJobModel.claim_token == claim_token,
-            RunJobModel.status.in_(
-                (
-                    RunJobStatus.LEASED.value,
-                    RunJobStatus.CANCEL_REQUESTED.value,
-                )
-            ),
+            RunJobModel.status.in_(source_statuses),
             RunJobModel.lease_expires_at.is_not(None),
             RunJobModel.lease_expires_at > now_iso,
         ]

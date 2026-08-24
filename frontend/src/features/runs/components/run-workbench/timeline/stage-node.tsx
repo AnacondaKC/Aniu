@@ -22,22 +22,49 @@ const STAGE_DISPLAY_NAME: Record<TraceStageKey, string> = {
   summary: "总结阶段",
 };
 
-function toneFor(status: StageStatus, isCurrent: boolean) {
-  if (status === "running" && isCurrent) {
+function toneFor(
+  status: StageStatus,
+  isCurrent: boolean,
+  runStatus: RunDetail["status"],
+  isStopping: boolean,
+) {
+  if (status === "running") {
+    if (isCurrent) {
+      return {
+        label: "进行中",
+        status: "text-sky-600 ",
+        row: "bg-sky-500/[0.04]",
+      };
+    }
+    if (isStopping && runStatus === "RUNNING") {
+      return {
+        label: "停止中",
+        status: "text-amber-600",
+        row: "bg-amber-500/[0.03]",
+      };
+    }
+    if (runStatus === "ABORTED") {
+      return {
+        label: "已中止",
+        status: "text-rose-500",
+        row: "bg-destructive/[0.03]",
+      };
+    }
+    if (runStatus === "FAILED") {
+      return {
+        label: "已中断",
+        status: "text-rose-500",
+        row: "bg-destructive/[0.03]",
+      };
+    }
     return {
-      label: "进行中",
-      status: "text-sky-600 ",
-      row: "bg-sky-500/[0.04]",
+      label: "已结束",
+      status: "text-muted-foreground",
+      row: "",
     };
   }
 
   switch (status) {
-    case "running":
-      return {
-        label: "进行中",
-        status: "text-muted-foreground",
-        row: "",
-      };
     case "completed":
       return {
         label: "完成",
@@ -159,18 +186,21 @@ export function StageNode({
   stage,
   now,
   liveStepDeltaByStepId,
+  isStopping = false,
 }: {
   run: RunDetail;
   stage: TraceStage;
   now: Date;
   liveStepDeltaByStepId: Record<string, string>;
+  isStopping?: boolean;
 }) {
   const isCurrent =
+    !isStopping &&
     run.status === "RUNNING" &&
     run.trace.current_stage_id === stage.stage_id &&
     stage.status === "running";
 
-  const tone = toneFor(stage.status, isCurrent);
+  const tone = toneFor(stage.status, isCurrent, run.status, isStopping);
   const defaultExpanded = stage.status === "running" || stage.status === "failed";
   const [override, setOverride] = useState<boolean | null>(null);
   const expanded = override ?? defaultExpanded;
@@ -184,7 +214,7 @@ export function StageNode({
   }, [stage.status]);
 
   const aggregate = useMemo(() => {
-    const model = buildProcessRailModel(stage, liveStepDeltaByStepId);
+    const model = buildProcessRailModel(stage, liveStepDeltaByStepId, isCurrent);
     const thinkingCount = model.timeline.filter((event) => event.kind === "thinking").length;
     const toolCalls = model.timeline.flatMap((event) =>
       event.kind === "tool" ? [event.call] : [],
@@ -195,7 +225,7 @@ export function StageNode({
       toolCalls,
       toolCount: toolCalls.length,
     };
-  }, [stage, liveStepDeltaByStepId]);
+  }, [stage, liveStepDeltaByStepId, isCurrent]);
   const duration =
     stage.started_at != null ? formatRunDuration(stage.started_at, stage.ended_at, now) : "--";
   const failureReason =
@@ -256,7 +286,11 @@ export function StageNode({
             tone.status,
           )}
         >
-          {stage.status === "running" ? null : stage.status === "completed" ? (
+          {stage.status === "running" ? (
+            isCurrent ? null : (
+              <SkipDot />
+            )
+          ) : stage.status === "completed" ? (
             <CheckDot />
           ) : stage.status === "failed" ? (
             <CrossDot />
@@ -287,18 +321,27 @@ export function StageNode({
           ) : null}
           {stage.steps.length > 0 ? (
             <>
-              <StageEvents stage={stage} liveStepDeltaByStepId={liveStepDeltaByStepId} />
+              <StageEvents
+                stage={stage}
+                liveStepDeltaByStepId={liveStepDeltaByStepId}
+                isLive={isCurrent}
+              />
               {stage.key !== "summary" ? (
                 <StageReport
                   stage={stage}
                   steps={stage.steps.filter((step) => step.type === "result")}
                   liveStepDeltaByStepId={liveStepDeltaByStepId}
+                  isLive={isCurrent}
                 />
               ) : null}
             </>
           ) : (
             <div className="text-muted-foreground py-2 text-[12px]">
-              {stage.status === "running" ? "阶段进行中…" : "暂无过程记录"}
+              {isCurrent
+                ? "阶段进行中…"
+                : isStopping && stage.status === "running"
+                  ? "正在停止…"
+                  : "暂无过程记录"}
             </div>
           )}
         </div>

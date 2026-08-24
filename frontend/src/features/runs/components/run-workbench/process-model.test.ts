@@ -99,6 +99,25 @@ describe("buildProcessRailModel", () => {
     expect(model.hasProcess).toBe(true);
   });
 
+  it("clamps active process state when the parent Run is stopping", () => {
+    const runningStage: TraceStage = {
+      ...stage([
+        step({
+          step_id: "thinking",
+          type: "thinking",
+          status: "running",
+          content: "未完成思考",
+        }),
+      ]),
+      status: "running",
+    };
+
+    const model = buildProcessRailModel(runningStage, {}, false);
+
+    expect(model.isLive).toBe(false);
+    expect(model.processActive).toBe(false);
+  });
+
   it("omits the redundant terminal status from the process rail", () => {
     const model = buildProcessRailModel(
       stage([

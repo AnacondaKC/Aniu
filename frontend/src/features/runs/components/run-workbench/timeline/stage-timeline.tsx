@@ -18,10 +18,12 @@ export function StageTimeline({
   run,
   now,
   liveStepDeltaByStepId,
+  isStopping = false,
 }: {
   run: RunDetail;
   now: Date;
   liveStepDeltaByStepId: Record<string, string>;
+  isStopping?: boolean;
 }) {
   const trace = run.trace;
   const stages = trace.stages;
@@ -48,11 +50,15 @@ export function StageTimeline({
   const runStage = stages.find((stage) => stage.key === "run");
   const summaryStage = stages.find((stage) => stage.key === "summary");
   const runStatusLabel =
-    runStage?.status === "completed"
-      ? "执行完成"
-      : runStage?.status === "failed"
-        ? "执行失败"
-        : "执行中";
+    isStopping && run.status === "RUNNING"
+      ? "停止中"
+      : run.status === "ABORTED"
+        ? "已中止"
+        : run.status === "FAILED" || runStage?.status === "failed"
+          ? "执行失败"
+          : run.status === "COMPLETED" || runStage?.status === "completed"
+            ? "执行完成"
+            : "执行中";
   const finalReportSteps = summaryStage?.steps.filter((step) => step.type === "result") ?? [];
   // The run summary is the authoritative final report; the summary stage result
   // is only a fallback while a terminal snapshot is settling.
@@ -116,6 +122,7 @@ export function StageTimeline({
               stage={stage}
               now={now}
               liveStepDeltaByStepId={liveStepDeltaByStepId}
+              isStopping={isStopping}
             />
           ))}
         </ol>

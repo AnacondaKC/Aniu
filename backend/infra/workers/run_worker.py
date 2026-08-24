@@ -128,6 +128,9 @@ class RunWorker:
 
         if claim_token is None:
             raise RuntimeError(f"claimed run job {run_id} has no fencing token")
+        if cancel_requested:
+            await self._execute_cancelled(run_id, claim_token)
+            return True
         if attempt > self._max_attempts:
             await self._mark_interrupted(
                 run_id,
@@ -143,10 +146,6 @@ class RunWorker:
                 error_code="reclaimed_run_not_replayed",
                 error_message="运行租约已过期；为避免重复交易，任务不会自动重放",
             )
-            return True
-
-        if cancel_requested:
-            await self._execute_cancelled(run_id, claim_token)
             return True
 
         await self._execute(run_id, claim_token)
@@ -178,6 +177,7 @@ class RunWorker:
                         run,
                         worker_id=self._worker_id,
                         claim_token=claim_token,
+                        require_leased=True,
                     )
 
                 async def ensure_claim_owned() -> None:
@@ -199,14 +199,24 @@ class RunWorker:
                 if heartbeat_failed.is_set():
                     raise RunAbortError(run_id)
                 await executor.execute(run_id)
+                await ensure_claim_owned()
                 terminal = await jobs.mark_terminal(
                     run_id,
                     status=RunJobStatus.COMPLETED,
                     worker_id=self._worker_id,
                     claim_token=claim_token,
+                    require_leased=True,
                 )
                 if terminal is None:
                     await session.rollback()
+                    current = await jobs.get_by_run_id(run_id)
+                    if (
+                        current is not None
+                        and current.worker_id == self._worker_id
+                        and current.claim_token == claim_token
+                        and current.status is RunJobStatus.CANCEL_REQUESTED
+                    ):
+                        raise RunAbortError(run_id)
                     return
                 await session.commit()
         except RunAbortError as exc:
@@ -252,38 +262,105 @@ class RunWorker:
         claim_token: str,
         aborted: bool,
         job_status: RunJobStatus,
-        error_code: str,
-        error_message: str,
+        error_code: str | None,
+        error_message: str | None,
     ) -> None:
-        """Finalize only while this worker still owns the current claim."""
+        """Finalize once, retrying as cancellation if that state wins the fence."""
 
+        try:
+            await self._finalize_execution_once(
+                run_id,
+                claim_token=claim_token,
+                aborted=aborted,
+                job_status=job_status,
+                error_code=error_code,
+                error_message=error_message,
+            )
+        except RunAbortError:
+            await self._finalize_execution_once(
+                run_id,
+                claim_token=claim_token,
+                aborted=True,
+                job_status=RunJobStatus.CANCELLED,
+                error_code="cancelled",
+                error_message=error_message or "user_requested",
+            )
+
+    async def _finalize_execution_once(
+        self,
+        run_id: int,
+        *,
+        claim_token: str,
+        aborted: bool,
+        job_status: RunJobStatus,
+        error_code: str | None,
+        error_message: str | None,
+    ) -> None:
         async with self._session_factory() as session:
             runs = RunRepository(session)
             jobs = RunJobRepository(session)
 
-            async def persist_with_claim(run: StrategyRun) -> bool:
+            async def persist_cancelled_run(run: StrategyRun) -> bool:
                 return await runs.save_fenced(
                     run,
                     worker_id=self._worker_id,
                     claim_token=claim_token,
                 )
 
+            async def persist_leased_run(run: StrategyRun) -> bool:
+                return await runs.save_fenced(
+                    run,
+                    worker_id=self._worker_id,
+                    claim_token=claim_token,
+                    require_leased=True,
+                )
+
+            current_job = await jobs.get_by_run_id(run_id)
+            if (
+                current_job is None
+                or current_job.worker_id != self._worker_id
+                or current_job.claim_token != claim_token
+            ):
+                return
+            if current_job.status is RunJobStatus.CANCEL_REQUESTED:
+                aborted = True
+                job_status = RunJobStatus.CANCELLED
+                error_code = "cancelled"
+                error_message = (
+                    current_job.cancel_reason or error_message or "user_requested"
+                )
+
             run = await runs.get_by_id(run_id)
+            run_was_terminal = run is not None and run.status is not RunStatus.RUNNING
             if run is not None and run.status.value == "RUNNING":
                 if aborted:
-                    run.abort()
-                    if not await persist_with_claim(run):
-                        await session.rollback()
-                        return
+                    await self._record_run_abort(
+                        run,
+                        runs=runs,
+                        session=session,
+                        persist_run=persist_cancelled_run,
+                        reason=error_message or error_code or "cancelled",
+                    )
                 else:
                     await self._record_run_failure(
                         run,
                         runs=runs,
                         session=session,
-                        persist_run=persist_with_claim,
-                        reason=error_message or error_code,
+                        persist_run=persist_leased_run,
+                        reason=error_message or error_code or "execution_error",
                     )
+            elif run is not None:
+                job_status = {
+                    RunStatus.COMPLETED: RunJobStatus.COMPLETED,
+                    RunStatus.FAILED: RunJobStatus.FAILED,
+                    RunStatus.ABORTED: RunJobStatus.CANCELLED,
+                }[run.status]
+                error_code = None
+                error_message = ""
 
+            require_leased = (
+                job_status is not RunJobStatus.CANCELLED and not run_was_terminal
+            )
             terminal = await jobs.mark_terminal(
                 run_id,
                 status=job_status,
@@ -291,9 +368,19 @@ class RunWorker:
                 claim_token=claim_token,
                 error_code=error_code,
                 error_message=error_message,
+                require_leased=require_leased,
             )
             if terminal is None:
                 await session.rollback()
+                current_job = await jobs.get_by_run_id(run_id)
+                if (
+                    require_leased
+                    and current_job is not None
+                    and current_job.worker_id == self._worker_id
+                    and current_job.claim_token == claim_token
+                    and current_job.status is RunJobStatus.CANCEL_REQUESTED
+                ):
+                    raise RunAbortError(run_id)
                 return
             await session.commit()
 
@@ -361,50 +448,39 @@ class RunWorker:
         error_code: str,
         error_message: str,
     ) -> None:
-        async with self._session_factory() as session:
-            runs = RunRepository(session)
-            jobs = RunJobRepository(session)
+        await self._finalize_execution(
+            run_id,
+            claim_token=claim_token,
+            aborted=False,
+            job_status=RunJobStatus.INTERRUPTED,
+            error_code=error_code,
+            error_message=error_message,
+        )
 
-            async def persist_with_claim(run: StrategyRun) -> bool:
-                return await runs.save_fenced(
-                    run,
-                    worker_id=self._worker_id,
-                    claim_token=claim_token,
-                )
+    async def _record_run_abort(
+        self,
+        run: StrategyRun,
+        *,
+        runs: RunRepository,
+        session: AsyncSession,
+        persist_run: Callable[[StrategyRun], Awaitable[bool]],
+        reason: str,
+    ) -> None:
+        """Persist cancellation and close every still-running trace step."""
 
-            run = await runs.get_by_id(run_id)
-            terminal_status = RunJobStatus.INTERRUPTED
-            terminal_error_code: str | None = error_code
-            terminal_error_message: str | None = error_message
-            if run is not None and run.status is RunStatus.RUNNING:
-                await self._record_run_failure(
-                    run,
-                    runs=runs,
-                    session=session,
-                    persist_run=persist_with_claim,
-                    reason=error_message or error_code,
-                )
-            elif run is not None:
-                terminal_status = {
-                    RunStatus.COMPLETED: RunJobStatus.COMPLETED,
-                    RunStatus.FAILED: RunJobStatus.FAILED,
-                    RunStatus.ABORTED: RunJobStatus.CANCELLED,
-                }[run.status]
-                terminal_error_code = None
-                terminal_error_message = None
+        async def persist_and_return(stored_run: StrategyRun) -> StrategyRun:
+            if not await persist_run(stored_run):
+                raise RunAbortError(stored_run.run_id)
+            return stored_run
 
-            terminal = await jobs.mark_terminal(
-                run_id,
-                status=terminal_status,
-                worker_id=self._worker_id,
-                claim_token=claim_token,
-                error_code=terminal_error_code,
-                error_message=terminal_error_message,
-            )
-            if terminal is None:
-                await session.rollback()
-                return
-            await session.commit()
+        previous_state = run.current_state.value
+        run.abort()
+        recorder = RunTraceSupport(
+            run_repo=runs,
+            committer=None,
+            snapshot_publisher=None,
+        ).make_recorder(run, persist_run=persist_and_return)
+        await recorder.fail_stage(previous_state, f"运行已中止：{reason}")
 
     async def _record_run_failure(
         self,
@@ -426,7 +502,7 @@ class RunWorker:
         run.fail(reason)
         recorder = RunTraceSupport(
             run_repo=runs,
-            committer=session,
+            committer=None,
             snapshot_publisher=None,
         ).make_recorder(run, persist_run=persist_and_return)
         await recorder.fail_stage(previous_state, f"运行失败：{reason}")

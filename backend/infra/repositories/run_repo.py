@@ -191,23 +191,27 @@ class RunRepository:
         *,
         worker_id: str,
         claim_token: str,
+        require_leased: bool = False,
         now: datetime | None = None,
     ) -> bool:
         """Persist a run only while its worker claim is still live."""
 
         now_iso = (now or datetime.now(tz=UTC)).isoformat()
+        source_statuses = (
+            (RunJobStatus.LEASED.value,)
+            if require_leased
+            else (
+                RunJobStatus.LEASED.value,
+                RunJobStatus.CANCEL_REQUESTED.value,
+            )
+        )
         claim_exists = (
             select(RunJobModel.run_id)
             .where(
                 RunJobModel.run_id == run.run_id,
                 RunJobModel.worker_id == worker_id,
                 RunJobModel.claim_token == claim_token,
-                RunJobModel.status.in_(
-                    (
-                        RunJobStatus.LEASED.value,
-                        RunJobStatus.CANCEL_REQUESTED.value,
-                    )
-                ),
+                RunJobModel.status.in_(source_statuses),
                 RunJobModel.lease_expires_at.is_not(None),
                 RunJobModel.lease_expires_at > now_iso,
             )

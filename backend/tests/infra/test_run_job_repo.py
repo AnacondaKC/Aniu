@@ -198,6 +198,46 @@ async def test_request_cancel_pending_is_terminal(session) -> None:
 
 
 @pytest.mark.asyncio
+async def test_completed_transition_does_not_override_cancel_request(session) -> None:
+    run_id = 202607272
+    runs = RunRepository(session)
+    jobs = RunJobRepository(session)
+    await runs.add(_run(run_id))
+    await jobs.create_pending(run_id)
+    await session.commit()
+
+    claimed = await jobs.claim_next(worker_id="w1", lease_seconds=20)
+    await session.commit()
+    assert claimed is not None and claimed.claim_token is not None
+    requested = await jobs.request_cancel(run_id, reason="manual_stop")
+    await session.commit()
+    assert requested is not None
+    assert requested.status is RunJobStatus.CANCEL_REQUESTED
+    run = await runs.get_by_id(run_id)
+    assert run is not None
+    run.fail("late failure")
+    assert not await runs.save_fenced(
+        run,
+        worker_id="w1",
+        claim_token=claimed.claim_token,
+        require_leased=True,
+    )
+
+    completed = await jobs.mark_terminal(
+        run_id,
+        status=RunJobStatus.COMPLETED,
+        worker_id="w1",
+        claim_token=claimed.claim_token,
+        require_leased=True,
+    )
+
+    assert completed is None
+    current = await jobs.get_by_run_id(run_id)
+    assert current is not None
+    assert current.status is RunJobStatus.CANCEL_REQUESTED
+
+
+@pytest.mark.asyncio
 async def test_stale_claim_cannot_heartbeat_or_finish_reclaimed_job(session) -> None:
     from sqlalchemy import update
 

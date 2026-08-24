@@ -10,7 +10,15 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { runKeys } from "@/features/runs/query-keys";
 
-export function RunWorkbenchPanel({ runId, now }: { runId: number | null; now: Date }) {
+export function RunWorkbenchPanel({
+  runId,
+  now,
+  isStopping = false,
+}: {
+  runId: number | null;
+  now: Date;
+  isStopping?: boolean;
+}) {
   if (runId === null) {
     return (
       <Card className="h-full">
@@ -25,13 +33,22 @@ export function RunWorkbenchPanel({ runId, now }: { runId: number | null; now: D
     );
   }
 
-  return <SelectedRunWorkbench runId={runId} now={now} />;
+  return <SelectedRunWorkbench runId={runId} now={now} isStopping={isStopping} />;
 }
 
-function SelectedRunWorkbench({ runId, now }: { runId: number; now: Date }) {
+function SelectedRunWorkbench({
+  runId,
+  now,
+  isStopping,
+}: {
+  runId: number;
+  now: Date;
+  isStopping: boolean;
+}) {
   const detailQuery = useQuery({
     queryKey: runKeys.detail(runId),
     queryFn: () => getRunDetail(runId),
+    refetchInterval: (query) => (query.state.data?.status === "RUNNING" ? 2_000 : false),
   });
 
   if (detailQuery.error) {
@@ -63,16 +80,25 @@ function SelectedRunWorkbench({ runId, now }: { runId: number; now: Date }) {
       key={detailQuery.data.run_id}
       initialSnapshot={detailQuery.data}
       now={now}
+      isStopping={isStopping}
     />
   );
 }
 
-function RunWorkbenchContent({ initialSnapshot, now }: { initialSnapshot: RunDetail; now: Date }) {
+function RunWorkbenchContent({
+  initialSnapshot,
+  now,
+  isStopping,
+}: {
+  initialSnapshot: RunDetail;
+  now: Date;
+  isStopping: boolean;
+}) {
   const { snapshot, liveStepDeltaByStepId } = useRunSnapshotStream(
     initialSnapshot.status === "RUNNING" ? initialSnapshot.run_id : undefined,
     initialSnapshot,
   );
-  const isLiveRun = snapshot.status === "RUNNING";
+  const isLiveRun = snapshot.status === "RUNNING" && !isStopping;
   const trace = snapshot.trace;
 
   // The live stage (if any) — used to drive tail-follow behavior.
@@ -129,7 +155,12 @@ function RunWorkbenchContent({ initialSnapshot, now }: { initialSnapshot: RunDet
       <Card className="border-border/75 bg-card/90 flex h-full min-h-0 flex-col overflow-hidden shadow-sm">
         <CardContent className="min-h-0 flex-1 px-4 py-3">
           <div ref={scrollerRef} className="h-full min-h-0 overflow-y-auto">
-            <StageTimeline run={snapshot} now={now} liveStepDeltaByStepId={liveStepDeltaByStepId} />
+            <StageTimeline
+              run={snapshot}
+              now={now}
+              liveStepDeltaByStepId={liveStepDeltaByStepId}
+              isStopping={isStopping}
+            />
           </div>
         </CardContent>
       </Card>

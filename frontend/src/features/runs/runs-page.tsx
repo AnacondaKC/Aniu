@@ -337,7 +337,7 @@ export function RunsPage() {
                 key={runsPage}
                 ref={runListRef}
                 data-testid="runs-scroll-list"
-                className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden p-1 pb-2 [scrollbar-width:thin]"
+                className="flex min-w-0 flex-1 [scrollbar-width:thin] items-center gap-1.5 overflow-x-auto overflow-y-hidden p-1 pb-2"
               >
                 {runsPage > 0 ? (
                   <Button
@@ -472,7 +472,11 @@ export function RunsPage() {
       </Card>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <RunWorkbenchPanel runId={effectiveSelectedRunId} now={now} />
+        <RunWorkbenchPanel
+          runId={effectiveSelectedRunId}
+          now={now}
+          isStopping={effectiveStoppingRunId === effectiveSelectedRunId}
+        />
       </div>
     </div>
   );

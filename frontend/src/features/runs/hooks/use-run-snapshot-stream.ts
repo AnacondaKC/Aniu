@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { buildApiUrl } from "@/lib/api";
@@ -40,19 +40,54 @@ export function useRunSnapshotStream(runId: number | undefined, initialSnapshot:
   const queryClient = useQueryClient();
   const [boundRunId, setBoundRunId] = useState(runId);
   const [baselineTraceSeq, setBaselineTraceSeq] = useState(initialSnapshot.trace.event_seq);
-  const [snapshot, setSnapshot] = useState(initialSnapshot);
+  const [streamSnapshot, setSnapshot] = useState(initialSnapshot);
+  const [persistedBaseline, setPersistedBaseline] = useState(() => ({
+    runId: initialSnapshot.run_id,
+    traceSeq: initialSnapshot.trace.event_seq,
+  }));
   const [liveStepDeltaByStepId, setLiveStepDeltaByStepId] = useState<Record<string, string>>({});
   const pendingStepDeltaRef = useRef<Record<string, string>>({});
   const flushHandleRef = useRef<number | null>(null);
   const traceSeqRef = useRef(initialSnapshot.trace.event_seq);
   const generationRef = useRef(0);
 
-  if (boundRunId !== runId) {
+  const switchedRun = boundRunId !== runId;
+  const terminalTransition =
+    initialSnapshot.run_id === streamSnapshot.run_id &&
+    initialSnapshot.status !== "RUNNING" &&
+    streamSnapshot.status === "RUNNING";
+  const newerPersistedTrace =
+    initialSnapshot.run_id === streamSnapshot.run_id &&
+    initialSnapshot.trace.event_seq > streamSnapshot.trace.event_seq;
+  const initialSnapshotWins = terminalTransition || newerPersistedTrace;
+  if (switchedRun) {
     setBoundRunId(runId);
     setSnapshot(initialSnapshot);
+    setPersistedBaseline({
+      runId: initialSnapshot.run_id,
+      traceSeq: initialSnapshot.trace.event_seq,
+    });
     setLiveStepDeltaByStepId({});
     setBaselineTraceSeq(initialSnapshot.trace.event_seq);
+  } else if (initialSnapshotWins) {
+    setSnapshot(initialSnapshot);
+    setPersistedBaseline({
+      runId: initialSnapshot.run_id,
+      traceSeq: initialSnapshot.trace.event_seq,
+    });
+    setLiveStepDeltaByStepId({});
   }
+  const snapshot = switchedRun || initialSnapshotWins ? initialSnapshot : streamSnapshot;
+  const visibleStepDeltaByStepId = switchedRun || initialSnapshotWins ? {} : liveStepDeltaByStepId;
+
+  useLayoutEffect(() => {
+    traceSeqRef.current = persistedBaseline.traceSeq;
+    pendingStepDeltaRef.current = {};
+    if (flushHandleRef.current !== null) {
+      window.cancelAnimationFrame(flushHandleRef.current);
+      flushHandleRef.current = null;
+    }
+  }, [persistedBaseline]);
 
   useEffect(() => {
     if (!runId) {
@@ -234,5 +269,5 @@ export function useRunSnapshotStream(runId: number | undefined, initialSnapshot:
     };
   }, [baselineTraceSeq, runId, queryClient]);
 
-  return { snapshot, liveStepDeltaByStepId };
+  return { snapshot, liveStepDeltaByStepId: visibleStepDeltaByStepId };
 }

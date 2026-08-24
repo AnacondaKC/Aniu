@@ -59,6 +59,11 @@ class FakePublicStockData:
                 "data": {
                     "bars": [
                         {
+                            "time": "2026-07-30T14:59:00Z",
+                            "close": 99.0,
+                            "amount": 11_500_000,
+                        },
+                        {
                             "time": "2026-07-31T09:30:00Z",
                             "close": 100.0,
                             "amount": 12_000_000,
@@ -125,6 +130,10 @@ async def test_market_overview_keeps_partial_errors() -> None:
     assert [item["id"] for item in overview["indices"]] == ["sse", "szse"]
     assert overview["indices"][0]["name"] == "上证指数"
     assert len(overview["trends"]) == 3
+    assert [point["time"] for point in overview["trends"][0]["points"]] == [
+        "2026-07-31T09:30:00Z",
+        "2026-07-31T10:00:00Z",
+    ]
     assert overview["trends"][0]["points"][0]["cumulative_amount"] == 12_000_000
     assert overview["turnover"] == {
         "today_amount": 579_000_000_000,

@@ -106,6 +106,72 @@ describe("useRunSnapshotStream", () => {
     expect(client.getQueryData<RunSummary[]>(runKeys.list(0))?.[0]?.status).toBe("COMPLETED");
   });
 
+  it("adopts newer persisted snapshots when the in-memory stream misses updates", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const newerRunningDetail: RunDetail = {
+      ...runningDetail,
+      trace: { ...runningDetail.trace, event_seq: 2 },
+    };
+    const abortedDetail: RunDetail = {
+      ...newerRunningDetail,
+      status: "ABORTED",
+      current_state: "Failed",
+      completed_at: "2026-07-26T01:05:00Z",
+    };
+    const { result, rerender } = renderHook(
+      ({ initialSnapshot }: { initialSnapshot: RunDetail }) =>
+        useRunSnapshotStream(runningDetail.run_id, initialSnapshot),
+      {
+        initialProps: { initialSnapshot: runningDetail },
+        wrapper: createWrapper(client),
+      },
+    );
+
+    const source = MockEventSource.instances[0];
+    const deltaKey = "run:na::thinking-1";
+    act(() => {
+      emit(source, {
+        kind: "checkpoint",
+        stream_id: "stream-a",
+        event_seq: 1,
+        run_id: runningDetail.run_id,
+        snapshot: runningDetail,
+      });
+      emit(source, {
+        kind: "trace_delta",
+        stream_id: "stream-a",
+        event_seq: 2,
+        run_id: runningDetail.run_id,
+        stage_id: "run:na",
+        step_id: "thinking-1",
+        channel: "content",
+        delta: "stale delta",
+      });
+    });
+    await waitFor(() => expect(result.current.liveStepDeltaByStepId[deltaKey]).toBe("stale delta"));
+
+    rerender({ initialSnapshot: newerRunningDetail });
+    await waitFor(() => expect(result.current.snapshot.trace.event_seq).toBe(2));
+    expect(result.current.liveStepDeltaByStepId).toEqual({});
+
+    act(() => {
+      emit(source, {
+        kind: "trace_delta",
+        stream_id: "stream-a",
+        event_seq: 3,
+        run_id: runningDetail.run_id,
+        stage_id: "run:na",
+        step_id: "thinking-1",
+        channel: "content",
+        delta: "fresh delta",
+      });
+    });
+    await waitFor(() => expect(result.current.liveStepDeltaByStepId[deltaKey]).toBe("fresh delta"));
+
+    rerender({ initialSnapshot: abortedDetail });
+    await waitFor(() => expect(result.current.snapshot.status).toBe("ABORTED"));
+  });
+
   it("reconnects with a cursor on gaps and applies every replayed delta", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useRunSnapshotStream(runningDetail.run_id, runningDetail), {

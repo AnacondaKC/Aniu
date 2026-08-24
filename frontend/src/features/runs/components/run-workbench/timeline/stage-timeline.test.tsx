@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { RunDetail, TraceStage } from "@/lib/api-types";
@@ -210,5 +210,92 @@ describe("StageTimeline", () => {
     const alerts = screen.getAllByRole("alert", { name: "失败原因" });
     expect(alerts).toHaveLength(2);
     for (const alert of alerts) expect(alert).toHaveTextContent("运行模型不可用");
+  });
+
+  it("freezes stale running steps as soon as manual stop is requested", () => {
+    const staleRunningStage: TraceStage = {
+      ...runStage,
+      status: "running",
+      ended_at: null,
+      steps: [
+        {
+          step_id: "thinking:stop",
+          type: "thinking",
+          title: "深度思考",
+          status: "running",
+          summary: null,
+          content: "正在分析停止边界。",
+          tool_call: null,
+          started_at: runStage.started_at,
+          ended_at: null,
+        },
+        {
+          step_id: "tool:stop",
+          type: "tool",
+          title: "行情查询",
+          status: "running",
+          summary: null,
+          content: null,
+          tool_call: {
+            call_id: "stop-call",
+            intent_line: "行情查询 · 600519.SH",
+            source: "public",
+            tool_name: "stock_quote",
+            display_name: "行情查询",
+            query_parameters: "symbols=600519.SH",
+          },
+          started_at: runStage.started_at,
+          ended_at: null,
+        },
+      ],
+    };
+    const run = makeRun({
+      status: "RUNNING",
+      current_state: "Run",
+      completed_at: null,
+      summary: null,
+      trace: {
+        schema_version: 3,
+        event_seq: 3,
+        current_stage_id: staleRunningStage.stage_id,
+        stages: [staleRunningStage],
+      },
+    });
+
+    const { container } = render(
+      <StageTimeline
+        run={run}
+        now={new Date("2026-07-25T10:00:30Z")}
+        liveStepDeltaByStepId={{}}
+        isStopping
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "展开阶段" }));
+
+    expect(screen.getAllByText("停止中").length).toBeGreaterThan(0);
+    expect(screen.getByText("已停止")).toBeInTheDocument();
+    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(container.querySelector(".animate-caret-blink")).toBeNull();
+  });
+
+  it("uses the terminal Run status when an aborted snapshot contains stale running stages", () => {
+    const staleStage: TraceStage = { ...runStage, status: "running", ended_at: null };
+    renderTimeline(
+      makeRun({
+        status: "ABORTED",
+        current_state: "Failed",
+        completed_at: "2026-07-25T10:00:25Z",
+        summary: null,
+        trace: {
+          schema_version: 3,
+          event_seq: 3,
+          current_stage_id: staleStage.stage_id,
+          stages: [staleStage],
+        },
+      }),
+    );
+
+    expect(screen.getByText("已中止")).toBeInTheDocument();
+    expect(screen.queryByText("执行中")).toBeNull();
   });
 });

@@ -12,12 +12,14 @@ export function StageReport({
   stage,
   steps,
   liveStepDeltaByStepId = {},
+  isLive = stage.status === "running",
   displayMode = "collapsible",
   showLabel = true,
 }: {
   stage: TraceStage;
   steps: TraceStep[];
   liveStepDeltaByStepId?: Record<string, string>;
+  isLive?: boolean;
   displayMode?: "collapsible" | "full";
   showLabel?: boolean;
 }) {
@@ -28,7 +30,7 @@ export function StageReport({
 
   const blocks = steps.map((step) => {
     const text = stepLiveText(stage, step, liveStepDeltaByStepId);
-    const streaming = isRunningStatus(step.status);
+    const streaming = isLive && isRunningStatus(step.status);
     return { step, text, streaming };
   });
   const anyContent = blocks.some((block) => block.text.trim() || block.streaming);
