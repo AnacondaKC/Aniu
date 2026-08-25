@@ -349,7 +349,7 @@ Aniu/
 
 ## 致谢
 
-感谢 FastAPI、React、Vite、Tailwind CSS、Radix UI、TanStack Query 以及其他开源项目提供的基础设施。Aniu 同时接入妙想和公开行情数据适配器，相关服务请遵循各自的使用条款。
+感谢 LinuxDo、FastAPI、React、Vite、Tailwind CSS以及其他开源项目提供的基础设施。Aniu 同时接入妙想和公开行情数据适配器，相关服务请遵循各自的使用条款。
 
 ## 许可证
 
